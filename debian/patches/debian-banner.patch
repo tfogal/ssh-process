@@ -1,0 +1,98 @@
+Description: Add DebianBanner server configuration option
+ Setting this to "no" causes sshd to omit the Debian revision from its
+ initial protocol handshake, for those scared by package-versioning.patch.
+Author: Kees Cook <kees@debian.org>
+Bug-Debian: http://bugs.debian.org/562048
+Forwarded: not-needed
+Last-Update: 2012-09-07
+
+Index: b/servconf.c
+===================================================================
+--- a/servconf.c
++++ b/servconf.c
+@@ -146,6 +146,7 @@
+ 	options->ip_qos_interactive = -1;
+ 	options->ip_qos_bulk = -1;
+ 	options->version_addendum = NULL;
++	options->debian_banner = -1;
+ }
+ 
+ void
+@@ -295,6 +296,8 @@
+ 		options->ip_qos_bulk = IPTOS_THROUGHPUT;
+ 	if (options->version_addendum == NULL)
+ 		options->version_addendum = xstrdup("");
++	if (options->debian_banner == -1)
++		options->debian_banner = 1;
+ 	/* Turn privilege separation on by default */
+ 	if (use_privsep == -1)
+ 		use_privsep = PRIVSEP_NOSANDBOX;
+@@ -343,6 +346,7 @@
+ 	sZeroKnowledgePasswordAuthentication, sHostCertificate,
+ 	sRevokedKeys, sTrustedUserCAKeys, sAuthorizedPrincipalsFile,
+ 	sKexAlgorithms, sIPQoS, sVersionAddendum,
++	sDebianBanner,
+ 	sDeprecated, sUnsupported
+ } ServerOpCodes;
+ 
+@@ -479,6 +483,7 @@
+ 	{ "kexalgorithms", sKexAlgorithms, SSHCFG_GLOBAL },
+ 	{ "ipqos", sIPQoS, SSHCFG_ALL },
+ 	{ "versionaddendum", sVersionAddendum, SSHCFG_GLOBAL },
++	{ "debianbanner", sDebianBanner, SSHCFG_GLOBAL },
+ 	{ NULL, sBadOption, 0 }
+ };
+ 
+@@ -1538,6 +1543,10 @@
+ 		}
+ 		return 0;
+ 
++	case sDebianBanner:
++		intptr = &options->debian_banner;
++		goto parse_int;
++
+ 	case sDeprecated:
+ 		logit("%s line %d: Deprecated option %s",
+ 		    filename, linenum, arg);
+Index: b/servconf.h
+===================================================================
+--- a/servconf.h
++++ b/servconf.h
+@@ -172,6 +172,7 @@
+ 	char   *authorized_principals_file;
+ 
+ 	char   *version_addendum;	/* Appended to SSH banner */
++	int	debian_banner;
+ }       ServerOptions;
+ 
+ /* Information about the incoming connection as used by Match */
+Index: b/sshd.c
+===================================================================
+--- a/sshd.c
++++ b/sshd.c
+@@ -425,7 +425,8 @@
+ 	}
+ 
+ 	xasprintf(&server_version_string, "SSH-%d.%d-%.100s%s%s%s",
+-	    major, minor, SSH_RELEASE,
++	    major, minor,
++	    options.debian_banner ? SSH_RELEASE : SSH_RELEASE_MINIMUM,
+ 	    *options.version_addendum == '\0' ? "" : " ",
+ 	    options.version_addendum, newline);
+ 
+Index: b/sshd_config.5
+===================================================================
+--- a/sshd_config.5
++++ b/sshd_config.5
+@@ -342,6 +342,11 @@
+ .Dq no .
+ The default is
+ .Dq delayed .
++.It Cm DebianBanner
++Specifies whether the distribution-specified extra version suffix is
++included during initial protocol handshake.
++The default is
++.Dq yes .
+ .It Cm DenyGroups
+ This keyword can be followed by a list of group name patterns, separated
+ by spaces.
