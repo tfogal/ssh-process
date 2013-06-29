@@ -73,6 +73,8 @@
 
 #include "includes.h"
 
+#include <assert.h>
+#include <inttypes.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #ifdef HAVE_SYS_STAT_H
@@ -149,6 +151,44 @@ char *ssh_program = _PATH_SSH_PROGRAM;
 
 /* This is used to store the pid of ssh_program */
 pid_t do_cmd_pid = -1;
+
+/* tjfadvice is used to enaable fallocate / fadvise. */
+int tjfadvice = 0;
+
+/* tjfmode is used to enable transparent 'fix layout as you go' code. */
+int tjfmode = 0;
+
+struct dsinfo {
+  const char* filename;
+  size_t dims[3];
+  size_t bpc; /* bytes per component, not bits */
+  enum { SIGNED, UNSIGNED } signedness;
+};
+static struct dsinfo tjfds[] = {
+  {"magnitude.nhdr.raw", {2025, 1600, 400}, 2, SIGNED},
+  /* nonsense, only for testing: */
+  {"DynamicBrickingDS.cpp", {5, 5, 5}, 1, UNSIGNED},
+};
+
+/* hacky way to control which files get the transparent nulls created. */
+static int
+tjffile(const char* filename)
+{
+  size_t i;
+  for(i=0; i < sizeof(tjfds) / sizeof(struct dsinfo) ; ++i) {
+    const size_t len = strlen(tjfds[i].filename) + 64;
+    char* pre = calloc(len, 1);
+    snprintf(pre, len, "./%s", tjfds[i].filename);
+    if(strcmp(tjfds[i].filename, filename) == 0 ||
+       strcmp(pre, filename) == 0) {
+      printf("[tjf] file is a tjf-file.\n");
+      return 1;
+    }
+    free(pre);
+  }
+  printf("[tjf] not a tjf-file, normal transfer used...\n");
+  return 0;
+}
 
 static void
 killchild(int signo)
@@ -403,7 +443,7 @@ main(int argc, char **argv)
 	addargs(&args, "-oClearAllForwardings=yes");
 
 	fflag = tflag = 0;
-	while ((ch = getopt(argc, argv, "dfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
+	while ((ch = getopt(argc, argv, "aTdfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
 		switch (ch) {
 		/* User-visible flags. */
 		case '1':
@@ -479,6 +519,12 @@ main(int argc, char **argv)
 			setmode(0, O_BINARY);
 #endif
 			break;
+    case 'T':
+      tjfmode = 1;
+      break;
+    case 'a':
+      tjfadvice = 1;
+      break;
 		default:
 			usage();
 		}
@@ -906,6 +952,74 @@ rsource(char *name, struct stat *statp)
 	(void) response();
 }
 
+/* fixes EINTR and so on.  first argument is read(2) or vwrite */
+static ssize_t
+tjfio(ssize_t (*f)(int, void*, size_t), int fd, void* buf, size_t n)
+{
+  size_t bytes = 0;
+  ssize_t by_cur;
+
+  do {
+    by_cur = f(fd, (char*)(buf)+bytes, n-bytes);
+    switch(by_cur) {
+      case -1:
+        /* if EAGAIN==EWOULDBLOCK, cases don't work.  Stupid POSIX. */
+        if(errno == EAGAIN) { errno = EWOULDBLOCK; }
+        switch(errno) {
+          case EINTR: continue; /* recoverable, just try again */
+          case EWOULDBLOCK: {
+            /* better to just wait for the data to be available. */
+            struct pollfd pfd;
+            pfd.fd = fd;
+            pfd.events = f == read ? POLLIN : POLLOUT;
+            (void)poll(&pfd, 1, -1);
+          } continue;
+          default: return -1;
+        }
+        break;
+      case 0: return bytes; break;
+      default: bytes += by_cur; break;
+    }
+  } while(bytes < n);
+
+  /* if we got here, everything was read. */
+  assert(bytes == n);
+  return n;
+}
+
+static int
+tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
+            int ofd, const char* dsname)
+{
+  off_t i;
+	enum { YES, NO, } wrerr = NO;
+
+  for(i=0; i < size; i += bp->cnt) {
+    assert(i < size);
+    size_t by_written;
+    const size_t sz = (uint64_t) size;
+    const size_t toread = i+bp->cnt > sz ? sz-i : bp->cnt;
+    /* grab data from the socket; check for early EOF */
+    size_t by_read = atomicio6(read, input, cp, toread, scpio, statbytes);
+    if(by_read == 0) {
+      run_err("%s", by_read != EPIPE ? strerror(errno) : "dropped connection");
+      exit(1);
+    }
+
+    /* update interface for user */
+    if(scpio(statbytes, by_read) == -1) {
+      errno = EINTR; return 1;
+    }
+
+    /* write data out to file. */
+    by_written = tjfio(vwrite, ofd, bp->buf, by_read);
+    if(by_written != by_read) {
+      wrerr = YES;
+    }
+  }
+  return wrerr == YES ? 1 : 0;
+}
+
 void
 sink(int argc, char **argv)
 {
@@ -1007,6 +1121,7 @@ sink(int argc, char **argv)
 			}
 			SCREWUP("expected control record");
 		}
+    /* read the file mode. Commonly something like 0644 */
 		mode = 0;
 		for (++cp; cp < buf + 5; cp++) {
 			if (*cp < '0' || *cp > '7')
@@ -1018,6 +1133,7 @@ sink(int argc, char **argv)
 
 		for (size = 0; isdigit(*cp);)
 			size = size * 10 + (*cp++ - '0');
+    fprintf(stderr, "[tjf] the size is: %lu\n", (uint64_t)(size));
 		if (*cp++ != ' ')
 			SCREWUP("size not delimited");
 		if ((strchr(cp, '/') != NULL) || (strcmp(cp, "..") == 0)) {
@@ -1077,10 +1193,25 @@ sink(int argc, char **argv)
 		}
 		omode = mode;
 		mode |= S_IWRITE;
+    fprintf(stderr, "[tjf] opening/creating file '%s'\n", np);
 		if ((ofd = open(np, O_WRONLY|O_CREAT, mode)) < 0) {
 bad:			run_err("%s: %s", np, strerror(errno));
 			continue;
 		}
+    if(tjfadvice) {
+      int fadv_err;
+      int falloc_err = posix_fallocate(ofd, 0, size);
+      printf("[tjf] preallocating / advising...\n");
+      if(falloc_err != 0) {
+        fprintf(stderr, "[tjf] error (%d) preallocating %lu bytes.\n",
+                falloc_err, (uint64_t)size);
+      }
+      fadv_err = posix_fadvise(ofd, 0, size, POSIX_FADV_SEQUENTIAL);
+      if(fadv_err != 0) {
+        fprintf(stderr, "[tjf] error (%d) giving advice.\n", fadv_err);
+      }
+    }
+
 		(void) atomicio(vwrite, remout, "", 1);
 		if ((bp = allocbuf(&buffer, ofd, COPY_BUFLEN)) == NULL) {
 			(void) close(ofd);
@@ -1090,48 +1221,60 @@ bad:			run_err("%s: %s", np, strerror(errno));
 		wrerr = NO;
 
 		statbytes = 0;
-		if (showprogress)
+		if (showprogress) {
 			start_progress_meter(curfile, size, &statbytes);
+    }
 		set_nonblock(remin);
-		for (count = i = 0; i < size; i += bp->cnt) {
-			amt = bp->cnt;
-			if (i + amt > size)
-				amt = size - i;
-			count += amt;
-			do {
-				j = atomicio6(read, remin, cp, amt,
-				    scpio, &statbytes);
-				if (j == 0) {
-					run_err("%s", j != EPIPE ?
-					    strerror(errno) :
-					    "dropped connection");
-					exit(1);
-				}
-				amt -= j;
-				cp += j;
-			} while (amt > 0);
 
-			if (count == bp->cnt) {
-				/* Keep reading so we stay sync'd up. */
-				if (wrerr == NO) {
-					if (atomicio(vwrite, ofd, bp->buf,
-					    count) != count) {
-						wrerr = YES;
-						wrerrno = errno;
-					}
-				}
-				count = 0;
-				cp = bp->buf;
-			}
-		}
+    if(tjfmode && tjffile(np)) {
+      printf("[tjf] tjffile '%s' detected; padding with nulls.\n", np);
+      if(tjftransfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
+        wrerr = YES;
+      }
+      count = size;
+    } else {
+      for (count = i = 0; i < size; i += bp->cnt) {
+        amt = bp->cnt;
+        if (i + amt > size)
+          amt = size - i;
+        count += amt;
+        do {
+          j = atomicio6(read, remin, cp, amt,
+              scpio, &statbytes);
+          if (j == 0) {
+            run_err("%s", j != EPIPE ?
+                strerror(errno) :
+                "dropped connection");
+            exit(1);
+          }
+          amt -= j;
+          cp += j;
+        } while (amt > 0);
+
+        if (count == bp->cnt) {
+          /* Keep reading so we stay sync'd up. */
+          if (wrerr == NO) {
+            if (atomicio(vwrite, ofd, bp->buf,
+                count) != count) {
+              wrerr = YES;
+              wrerrno = errno;
+            }
+          }
+          count = 0;
+          cp = bp->buf;
+        }
+      }
+      printf("[tjf] doing final write of %zu bytes\n", count);
+      if (count != 0 && wrerr == NO &&
+          atomicio(vwrite, ofd, bp->buf, count) != count) {
+        wrerr = YES;
+        wrerrno = errno;
+      }
+    }
 		unset_nonblock(remin);
 		if (showprogress)
 			stop_progress_meter();
-		if (count != 0 && wrerr == NO &&
-		    atomicio(vwrite, ofd, bp->buf, count) != count) {
-			wrerr = YES;
-			wrerrno = errno;
-		}
+
 		if (wrerr == NO && (!exists || S_ISREG(stb.st_mode)) &&
 		    ftruncate(ofd, size) != 0) {
 			run_err("%s: truncate: %s", np, strerror(errno));
