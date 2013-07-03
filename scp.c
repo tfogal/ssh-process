@@ -158,33 +158,19 @@ int tjfadvice = 0;
 /* tjfmode is used to enable transparent 'fix layout as you go' code. */
 int tjfmode = 0;
 
-struct dsinfo {
-  const char* filename;
-  size_t dims[3];
-  size_t bpc; /* bytes per component, not bits */
-  enum { SIGNED, UNSIGNED } signedness;
-};
-static struct dsinfo tjfds[] = {
-  {"magnitude.nhdr.raw", {2025, 1600, 400}, 2, SIGNED},
-  /* nonsense, only for testing: */
-  {"DynamicBrickingDS.cpp", {5, 5, 5}, 1, UNSIGNED},
-};
+/* when tjfmode is on AND this is on, we seek to create holes instead of
+ * writing 0's explicitly. */
+int tjfholy = 0;
+
+#include "datasets.h"
 
 /* hacky way to control which files get the transparent nulls created. */
 static int
 tjffile(const char* filename)
 {
-  size_t i;
-  for(i=0; i < sizeof(tjfds) / sizeof(struct dsinfo) ; ++i) {
-    const size_t len = strlen(tjfds[i].filename) + 64;
-    char* pre = calloc(len, 1);
-    snprintf(pre, len, "./%s", tjfds[i].filename);
-    if(strcmp(tjfds[i].filename, filename) == 0 ||
-       strcmp(pre, filename) == 0) {
-      printf("[tjf] file is a tjf-file.\n");
-      return 1;
-    }
-    free(pre);
+  if(tjf_findds(filename) != NULL) {
+    printf("[tjf] file is a tjf-file.\n");
+    return 1;
   }
   printf("[tjf] not a tjf-file, normal transfer used...\n");
   return 0;
@@ -443,7 +429,7 @@ main(int argc, char **argv)
 	addargs(&args, "-oClearAllForwardings=yes");
 
 	fflag = tflag = 0;
-	while ((ch = getopt(argc, argv, "aTdfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
+	while ((ch = getopt(argc, argv, "aThdfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
 		switch (ch) {
 		/* User-visible flags. */
 		case '1':
@@ -524,6 +510,9 @@ main(int argc, char **argv)
       break;
     case 'a':
       tjfadvice = 1;
+      break;
+    case 'h':
+      tjfholy = 1;
       break;
 		default:
 			usage();
@@ -987,6 +976,15 @@ tjfio(ssize_t (*f)(int, void*, size_t), int fd, void* buf, size_t n)
   return n;
 }
 
+__attribute__((unused)) static void
+tjfplace(const char *msg, int fd)
+{
+  off_t pos = lseek(fd, 0, SEEK_CUR);
+  printf("[tjf] %s: at %lu now\n", msg, (uint64_t)pos);
+}
+
+/* we do this totally different.  we read a "scanline" at a time, and then
+ * append whatever pad bytes are asked for. */
 static int
 tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
             int ofd, const char* dsname)
@@ -994,17 +992,27 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
   off_t i;
 	enum { YES, NO, } wrerr = NO;
 
-  for(i=0; i < size; i += bp->cnt) {
+  const struct dsinfo* tds = tjf_findds(dsname);
+
+  /* otherwise the buffer is too small and we'll overflow it: */
+  assert(bp->cnt > tds->scanline_size);
+
+  fprintf(stderr, "[tjf] adding %zu bytes (padding) for every %zu bytes.\n",
+          tds->add_bytes, tds->scanline_size);
+  void* padding = malloc(tds->add_bytes);
+  memset(padding, 0, tds->add_bytes);
+
+  for(i=0; i < size; i += tds->scanline_size) {
     assert(i < size);
-    size_t by_written;
     const size_t sz = (uint64_t) size;
-    const size_t toread = i+bp->cnt > sz ? sz-i : bp->cnt;
+    const size_t toread = i+tds->scanline_size > sz ? sz-i : tds->scanline_size;
     /* grab data from the socket; check for early EOF */
-    size_t by_read = atomicio6(read, input, cp, toread, scpio, statbytes);
+    const size_t by_read = atomicio6(read, input, cp, toread, scpio, statbytes);
     if(by_read == 0) {
       run_err("%s", by_read != EPIPE ? strerror(errno) : "dropped connection");
       exit(1);
     }
+    assert(by_read <= tds->scanline_size);
 
     /* update interface for user */
     if(scpio(statbytes, by_read) == -1) {
@@ -1012,9 +1020,85 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
     }
 
     /* write data out to file. */
-    by_written = tjfio(vwrite, ofd, bp->buf, by_read);
-    if(by_written != by_read) {
-      wrerr = YES;
+    {
+      size_t by_written;
+      by_written = tjfio(vwrite, ofd, cp, by_read);
+      if(by_written != by_read) {
+        fprintf(stderr, "[tjf] error writing data\n");
+        wrerr = YES;
+      }
+      /* tjfplace("after normal write", ofd); */
+      /* wrote one scanline, now need to add the padding bytes. */
+      by_written = tjfio(vwrite, ofd, padding, tds->add_bytes);
+      if(by_written != tds->add_bytes) {
+        fprintf(stderr, "[tjf] error adding pad bytes.\n");
+        wrerr = YES;
+      }
+      /* tjfplace("wrote pad bytes", ofd); */
+    }
+  }
+  free(padding);
+  return wrerr == YES ? 1 : 0;
+}
+
+static int
+is_even(uint64_t value)
+{
+  return (value & 0x1) == 0;
+}
+
+/* like a 'tjftransfer', but instead it leaves 'holes' in the file (get
+ * it?), simply by seeking over to the next appropriate scanline. */
+static int
+holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
+              int ofd, const char* dsname)
+{
+  off_t i;
+	enum { YES, NO, } wrerr = NO;
+
+  const struct dsinfo* tds = tjf_findds(dsname);
+
+  /* otherwise the buffer is too small and we'll overflow it: */
+  assert(bp->cnt > tds->scanline_size);
+
+  fprintf(stderr, "[tjf] skipping %zu bytes (holes) for every %zu bytes.\n",
+          tds->add_bytes, tds->scanline_size);
+
+  for(i=0; i < size; i += tds->scanline_size) {
+    assert(i < size);
+    const size_t sz = (uint64_t) size;
+    const size_t toread = i+tds->scanline_size > sz ? sz-i : tds->scanline_size;
+    /* grab data from the socket; check for early EOF */
+    const size_t by_read = atomicio6(read, input, cp, toread, scpio, statbytes);
+    if(by_read == 0) {
+      run_err("%s", by_read != EPIPE ? strerror(errno) : "dropped connection");
+      exit(1);
+    }
+    assert(by_read <= tds->scanline_size);
+
+    /* update interface for user */
+    if(scpio(statbytes, by_read) == -1) {
+      errno = EINTR; return 1;
+    }
+
+    /* write data out to file. */
+    {
+      size_t by_written;
+      by_written = tjfio(vwrite, ofd, cp, by_read);
+      if(by_written != by_read) {
+        fprintf(stderr, "[tjf] error writing data\n");
+        wrerr = YES;
+      }
+      /* wrote one scanline, now seek to make the next write align. */
+      {
+        off_t next_line = lseek(ofd, tds->add_bytes, SEEK_CUR);
+        if(next_line == -1) {
+          perror("[tjf] error seeking over pad bytes");
+          wrerr = YES;
+        } else {
+          assert(is_even(next_line));
+        }
+      }
     }
   }
   return wrerr == YES ? 1 : 0;
@@ -1227,9 +1311,17 @@ bad:			run_err("%s: %s", np, strerror(errno));
 		set_nonblock(remin);
 
     if(tjfmode && tjffile(np)) {
-      printf("[tjf] tjffile '%s' detected; padding with nulls.\n", np);
-      if(tjftransfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
-        wrerr = YES;
+      printf("[tjf] tjffile '%s' detected; ", np);
+      if(tjfholy) {
+        printf("creating a hole-y file.\n");
+        if(holy_transfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
+          wrerr = YES;
+        }
+      } else {
+        printf("padding with nulls.\n");
+        if(tjftransfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
+          wrerr = YES;
+        }
       }
       count = size;
     } else {
@@ -1270,16 +1362,16 @@ bad:			run_err("%s: %s", np, strerror(errno));
         wrerr = YES;
         wrerrno = errno;
       }
+      if (wrerr == NO && (!exists || S_ISREG(stb.st_mode)) &&
+          ftruncate(ofd, size) != 0) {
+        run_err("%s: truncate: %s", np, strerror(errno));
+        wrerr = DISPLAYED;
+      }
     }
 		unset_nonblock(remin);
 		if (showprogress)
 			stop_progress_meter();
 
-		if (wrerr == NO && (!exists || S_ISREG(stb.st_mode)) &&
-		    ftruncate(ofd, size) != 0) {
-			run_err("%s: truncate: %s", np, strerror(errno));
-			wrerr = DISPLAYED;
-		}
 		if (pflag) {
 			if (exists || omode != mode)
 #ifdef HAVE_FCHMOD
