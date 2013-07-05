@@ -102,11 +102,15 @@ read_by_scanline(const char* filename, size_t scanline, size_t padding,
 static void
 ds_info(const struct dsinfo* ds)
 {
+#ifdef DEBUGGING
   printf("dset: %zu+%zu (%zu bytes), %zu bpc", ds->scanline_size,
          ds->add_bytes, ds->scanline_size+ds->add_bytes, ds->bpc);
   if(ds->signedness == SIGNED) { printf(" signed"); }
   else { printf(" unsigned"); }
   printf(" {%zu x %zu x %zu}\n", ds->dims[0], ds->dims[1], ds->dims[2]);
+#else
+  (void)ds;
+#endif
 }
 
 static char* filename = NULL;
