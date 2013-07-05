@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <libgen.h>
 #include <poll.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,8 @@
 #include <unistd.h>
 
 #include "../../datasets.h"
+#include "lioread.h"
+#include "need.h"
 
 static void usage(const char* name) {
   fprintf(stderr, "%s - threshold every point in a file\n", name);
@@ -38,7 +41,8 @@ __attribute__((malloc)) static char* tjf_basename(const char* path) {
 }
 
 ssize_t
-io(ssize_t(*f) (int, void*, size_t), int fd, void* buf, size_t len) {
+io(ssize_t(*f) (int, void*, size_t), int fd, void* buf, size_t len)
+{
   size_t position = 0;
   char* buffer = buf;
 
@@ -66,13 +70,10 @@ io(ssize_t(*f) (int, void*, size_t), int fd, void* buf, size_t len) {
 }
 
 static void
-read_by_scanline(const char* filename, size_t scanline, size_t padding, const size_t dims[3])
+read_by_scanline(const char* filename, size_t scanline, size_t padding,
+                 const size_t dims[3])
 {
-  int fd = open(filename, O_RDONLY | O_NOATIME);
-  if(fd == -1) {
-    perror("opening data file");
-    exit(EXIT_FAILURE);
-  }
+  int fd = needopen(filename, O_RDONLY | O_NOATIME);
   void* buffer = calloc(scanline, sizeof(uint16_t));
 
   const size_t n_scanlines = dims[1] * dims[2];
@@ -87,25 +88,73 @@ read_by_scanline(const char* filename, size_t scanline, size_t padding, const si
       exit(EXIT_FAILURE);
     }
   }
+  needclose(fd);
 }
 
-int main(int argc, char* argv[]) {
-  if(argc != 2) {
-    usage(argv[0]);
-  }
-
-  char* filename = tjf_basename(argv[1]);
-  struct dsinfo* ds = tjf_findds(filename);
-  free(filename);
-  if(ds == NULL) {
-    fprintf(stderr, "Don't know dataset '%s', bailing.\n", argv[1]);
-    return EXIT_FAILURE;
-  }
+static void
+ds_info(const struct dsinfo* ds)
+{
   printf("dset: %zu+%zu (%zu bytes), %zu bpc", ds->scanline_size,
          ds->add_bytes, ds->scanline_size+ds->add_bytes, ds->bpc);
   if(ds->signedness == SIGNED) { printf(" signed"); }
   else { printf(" unsigned"); }
   printf(" {%zu x %zu x %zu}\n", ds->dims[0], ds->dims[1], ds->dims[2]);
+}
 
-  read_by_scanline(argv[1], ds->scanline_size, ds->add_bytes, ds->dims);
+static char* filename = NULL;
+static bool use_lio = false;
+static bool no_padding = false;
+static bool compare = false;
+
+int main(int argc, char* argv[]) {
+  if(argc < 2) {
+    usage(argv[0]);
+  }
+
+  int ch;
+  while((ch = getopt(argc, argv, "f:bpc")) != -1) {
+    switch(ch) {
+      case 'f':
+        filename = strdup(optarg);
+        break;
+      case 'b':
+        use_lio = true;
+        break;
+      case 'p':
+        no_padding = true;
+        break;
+      case 'c':
+        compare = true;
+        break;
+      default:
+        usage(argv[0]);
+    }
+  }
+  struct dsinfo* ds = NULL;
+  {
+    char* tmpname = tjf_basename(filename);
+    ds = tjf_findds(tmpname);
+    free(tmpname);
+  }
+
+  if(ds == NULL) {
+    fprintf(stderr, "Don't know dataset '%s', bailing.\n", argv[1]);
+    return EXIT_FAILURE;
+  }
+  ds_info(ds);
+
+  if(no_padding) {
+    ds->add_bytes = 0;
+  }
+
+  if(compare) {
+    assert(use_lio == false); /* doesn't make sense, then */
+  } else if(use_lio) {
+    read_lio(filename, ds->add_bytes, ds->dims, ds->bpc);
+  } else {
+    read_by_scanline(filename, ds->scanline_size, ds->add_bytes, ds->dims);
+  }
+  free(filename);
+
+  return EXIT_SUCCESS;
 }
