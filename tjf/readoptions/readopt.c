@@ -132,6 +132,7 @@ int main(int argc, char* argv[]) {
         break;
       case 'm':
         mpi = true;
+        break;
       case 'p':
         no_padding = true;
         break;
