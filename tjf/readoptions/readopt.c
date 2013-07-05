@@ -17,11 +17,19 @@
 
 #include "../../datasets.h"
 #include "lioread.h"
+#include "mpiread.h"
 #include "need.h"
 
 static void usage(const char* name) {
-  fprintf(stderr, "%s - threshold every point in a file\n", name);
-  fprintf(stderr, "usage: %s filename\n", name);
+  fprintf(stderr, "%s - read every element a raw dataset\n", name);
+  fprintf(stderr, "usage: %s [opts]\n", name);
+  fprintf(stderr, "\n"
+    "\t-f filename            file to read\n"
+    "\t-b                     use lio_listio-based read\n"
+    "\t-h                     this help information\n"
+    "\t-m                     MPI-based read.  make sure to use mpiexec\n"
+    "\t-p                     don't consider pad bytes\n"
+  );
   exit(2);
 }
 
@@ -105,6 +113,7 @@ static char* filename = NULL;
 static bool use_lio = false;
 static bool no_padding = false;
 static bool compare = false;
+static bool mpi = false;
 
 int main(int argc, char* argv[]) {
   if(argc < 2) {
@@ -112,19 +121,19 @@ int main(int argc, char* argv[]) {
   }
 
   int ch;
-  while((ch = getopt(argc, argv, "f:bpc")) != -1) {
+  while((ch = getopt(argc, argv, "f:bpcmh")) != -1) {
     switch(ch) {
       case 'f':
         filename = strdup(optarg);
         break;
+      case 'h': usage(argv[0]); break;
       case 'b':
         use_lio = true;
         break;
+      case 'm':
+        mpi = true;
       case 'p':
         no_padding = true;
-        break;
-      case 'c':
-        compare = true;
         break;
       default:
         usage(argv[0]);
@@ -151,6 +160,13 @@ int main(int argc, char* argv[]) {
     assert(use_lio == false); /* doesn't make sense, then */
   } else if(use_lio) {
     read_lio(filename, ds->add_bytes, ds->dims, ds->bpc);
+  } else if(mpi) {
+    const size_t expanded[3] = {
+      ds->dims[0] + (ds->add_bytes / ds->bpc),
+      ds->dims[1],
+      ds->dims[2]
+    };
+    read_mpi(filename, ds->dims, expanded, ds->bpc);
   } else {
     read_by_scanline(filename, ds->scanline_size, ds->add_bytes, ds->dims);
   }
