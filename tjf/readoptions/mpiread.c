@@ -2,7 +2,14 @@
 #include <inttypes.h>
 #include <mpi.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "mpiread.h"
+
+#ifdef DEBUGGING
+# define debug(x) do { x; } while(0)
+#else
+# define debug(x) /* debug not enabled */
+#endif
 
 /* give an MPI call non-lame semantics, so one doesn't need to create a stack
  * variable. */
@@ -48,11 +55,12 @@ create_type(const size_t real_dims[3], const size_t faux_dims[3])
   /* const */ int offsets[3] = {
     0, 0, subsize[2] * rank()
   };
-  printf("My array is {%d--%d, %d--%d, %d--%d} within {%d, %d, %d}\n",
-         offsets[0], offsets[0]+subsize[0],
-         offsets[1], offsets[1]+subsize[1],
-         offsets[2], offsets[2]+subsize[2],
-         sizes[0], sizes[1], sizes[2]);
+  debug(printf("[%2lu] My array is {%4d--%4d, %4d--%4d, %3d--%3d} within "
+               "{%4d, %4d, %3d}\n", rank(),
+               offsets[0], offsets[0]+subsize[0],
+               offsets[1], offsets[1]+subsize[1],
+               offsets[2], offsets[2]+subsize[2],
+               sizes[0], sizes[1], sizes[2]));
   MPI_Datatype filetype;
   int typeerr = MPI_Type_create_subarray(3, sizes, subsize, offsets,
                                          MPI_ORDER_C, MPI_UNSIGNED_SHORT,
@@ -60,6 +68,11 @@ create_type(const size_t real_dims[3], const size_t faux_dims[3])
   if(typeerr != 0) {
     fprintf(stderr, "mpi error: %d\n", typeerr);
     MPI_Abort(MPI_COMM_WORLD, typeerr);
+  }
+  int commiterr = MPI_Type_commit(&filetype);
+  if(commiterr != 0) {
+    fprintf(stderr, "[%lu] could not commit: %d\n", rank(), commiterr);
+    MPI_Abort(MPI_COMM_WORLD, commiterr);
   }
   return filetype;
 }
@@ -90,7 +103,36 @@ read_mpi(const char* filename,
     fprintf(stderr, "[%lu] could not open %s\n", rank(), filename);
     MPI_Abort(MPI_COMM_WORLD, oerr);
   }
+  int verr = MPI_File_set_view(fh, 0, MPI_UNSIGNED_SHORT, subarray, "native",
+                               MPI_INFO_NULL);
+  if(verr != 0) {
+    fprintf(stderr, "[%lu] error setting view\n", rank());
+    MPI_Abort(MPI_COMM_WORLD, verr);
+  }
 
+  const int subsize[3] = {
+    real_dims[0],
+    real_dims[1],
+    real_dims[2] / size()
+  };
+  void* buf = malloc(bpc*subsize[0]*subsize[1]*subsize[2]);
+  /* now we can finally do the damn read. */
+  MPI_Status rdinfo;
+  int rerr = MPI_File_read_all(fh, buf, subsize[0]*subsize[1]*subsize[2],
+                               MPI_UNSIGNED_SHORT, &rdinfo);
+  if(rerr != 0) {
+    fprintf(stderr, "[%lu] error reading: %d\n", rank(), rerr);
+    MPI_Abort(MPI_COMM_WORLD, rerr);
+  }
+  int rdbytes = 0;
+  int gcerr = MPI_Get_count(&rdinfo, MPI_UNSIGNED_SHORT, &rdbytes);
+  if(gcerr != 0) {
+    fprintf(stderr, "[%lu] error getting # of elems: %d\n", rank(), gcerr);
+    MPI_Abort(MPI_COMM_WORLD, gcerr);
+  }
+  debug(printf("[%2lu] Read %lu elems.\n", rank(), (uint64_t)rdbytes));
+
+  /* clean up our array types and file pointers. */
   int ferr = MPI_Type_free(&subarray);
   if(ferr != 0) {
     fprintf(stderr, "error cleaning data type: %d\n", ferr);
