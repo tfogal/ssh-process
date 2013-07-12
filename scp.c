@@ -163,6 +163,8 @@ int tjfmode = 0;
 int tjfholy = 0;
 
 #include "datasets.h"
+#include "functor.h"
+#include "histogram.h"
 
 /* hacky way to control which files get the transparent nulls created. */
 static int
@@ -987,7 +989,7 @@ tjfplace(const char *msg, int fd)
  * append whatever pad bytes are asked for. */
 static int
 tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
-            int ofd, const char* dsname)
+            int ofd, const char* dsname, struct processor* proc)
 {
   off_t i;
 	enum { YES, NO, } wrerr = NO;
@@ -1036,8 +1038,16 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
       }
       /* tjfplace("wrote pad bytes", ofd); */
     }
+
+    { /* run whatever processing elements the user wants. */
+      proc->run(proc, padding, by_read/tds->bpc, tds->signedness == SIGNED,
+                tds->bpc);
+    }
   }
   free(padding);
+  if(proc->fini) {
+    proc->fini(proc);
+  }
   return wrerr == YES ? 1 : 0;
 }
 
@@ -1051,7 +1061,7 @@ is_even(uint64_t value)
  * it?), simply by seeking over to the next appropriate scanline. */
 static int
 holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
-              int ofd, const char* dsname)
+              int ofd, const char* dsname, struct processor* proc)
 {
   off_t i;
 	enum { YES, NO, } wrerr = NO;
@@ -1081,6 +1091,12 @@ holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
       errno = EINTR; return 1;
     }
 
+
+    { /* run whatever processing elements the user wants. */
+      proc->run(proc, cp, by_read/tds->bpc, tds->signedness == SIGNED,
+                tds->bpc);
+    }
+
     /* write data out to file. */
     {
       size_t by_written;
@@ -1100,6 +1116,9 @@ holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
         }
       }
     }
+  }
+  if(proc->fini) {
+    proc->fini(proc);
   }
   return wrerr == YES ? 1 : 0;
 }
@@ -1311,15 +1330,16 @@ bad:			run_err("%s: %s", np, strerror(errno));
 		set_nonblock(remin);
 
     if(tjfmode && tjffile(np)) {
+      struct processor* histo = histogram();
       printf("[tjf] tjffile '%s' detected; ", np);
       if(tjfholy) {
         printf("creating a hole-y file.\n");
-        if(holy_transfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
+        if(holy_transfer(remin, size, cp, bp, &statbytes, ofd, np, histo) != 0) {
           wrerr = YES;
         }
       } else {
         printf("padding with nulls.\n");
-        if(tjftransfer(remin, size, cp, bp, &statbytes, ofd, np) != 0) {
+        if(tjftransfer(remin, size, cp, bp, &statbytes, ofd, np, histo) != 0) {
           wrerr = YES;
         }
       }
