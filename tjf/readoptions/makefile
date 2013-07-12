@@ -1,5 +1,5 @@
 MPICC=mpicc
-CFLAGS:=-std=c99 -Wall -Wextra -ggdb
+CFLAGS:=-std=c99 -Wall -Wextra -O3
 OBJ=need.o readopt.o ../../datasets.o lioread.o mpiread.mo
 LIBS=-lrt
 
