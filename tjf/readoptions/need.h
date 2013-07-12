@@ -6,6 +6,7 @@
  * collect $200 */
 
 extern int needopen(const char* filename, int bits);
+extern int needopenmode(const char* filename, int bits, mode_t);
 extern void needclose(int fd);
 
 #endif /* TJF_NEEDIO_H */
