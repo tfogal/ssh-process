@@ -162,6 +162,9 @@ int tjfmode = 0;
  * writing 0's explicitly. */
 int tjfholy = 0;
 
+/* do marching cubes during transfer */
+static int tjfmarching = 0;
+
 #include "datasets.h"
 #include "functor.h"
 #include "histogram.h"
@@ -431,7 +434,7 @@ main(int argc, char **argv)
 	addargs(&args, "-oClearAllForwardings=yes");
 
 	fflag = tflag = 0;
-	while ((ch = getopt(argc, argv, "aThdfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
+	while ((ch = getopt(argc, argv, "maThdfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
 		switch (ch) {
 		/* User-visible flags. */
 		case '1':
@@ -516,6 +519,7 @@ main(int argc, char **argv)
     case 'h':
       tjfholy = 1;
       break;
+    case 'm': tjfmarching = 1; break;
 		default:
 			usage();
 		}
@@ -1051,6 +1055,73 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
   return wrerr == YES ? 1 : 0;
 }
 
+size_t min(const size_t a, const size_t b) {
+  return a < b ? a : b;
+}
+
+/* similar to tjftransfer, but only calls the given processor when we have
+ * cached up two slices worth of data. */
+static int
+slice_transfer(int input, int ofd, const char* dsname, struct processor* proc)
+{
+	enum { YES, NO, } wrerr = NO;
+
+  const struct dsinfo* tds = tjf_findds(dsname);
+  const size_t slice_size = tds->dims[0] * tds->dims[1] * tds->bpc;
+  const size_t slices = tds->dims[2];
+  void* buffer = calloc(slice_size, 2);
+
+  fprintf(stderr, "[tjf] 2-slice-based transfer.\n");
+
+  assert(slices >= 2 && "can't prime like this; algorithm bad.");
+  /* prime the buffer by reading one slice into the 2nd half of the buffer. */
+  {
+    const size_t bytes_read = atomicio(read, input, buffer, slice_size);
+    if(bytes_read == 0) {
+      run_err("%s", bytes_read != EPIPE ? strerror(errno)
+                                        : "dropped connection");
+      goto error;
+    }
+  }
+
+  /* now iterate through the rest of the slices.  each time, we'll copy the
+   * slice we read last round into the left half of the buffer, and read the
+   * new slice into the right half of the buffer. */
+  for(size_t slice=1; slice < slices; slice++) {
+    /* copy right to left */
+    memcpy(buffer, ((const char*)buffer)+slice_size, slice_size);
+
+    /* read new slice into right half */
+    const size_t by_read = atomicio(read, input, (char*)buffer+slice_size,
+                                    slice_size);
+    assert(by_read <= slice_size);
+    if(by_read == 0) {
+      run_err("%s", by_read != EPIPE ? strerror(errno) : "dropped connection");
+      goto error;
+    }
+    {
+      const size_t bytes_written = tjfio(vwrite, ofd, buffer, by_read);
+      if(bytes_written != by_read) {
+        run_err("%s", "error writing data back out");
+        goto error;
+      }
+    }
+    { /* run whatever processing elements the user wants. */
+      proc->run(proc, buffer, by_read/tds->bpc, tds->signedness == SIGNED,
+                tds->bpc);
+    }
+  }
+  free(buffer);
+  if(proc->fini) {
+    proc->fini(proc);
+  }
+  return wrerr == YES ? 1 : 0;
+
+error:
+  free(buffer);
+  exit(1);
+}
+
 static int
 is_even(uint64_t value)
 {
@@ -1332,7 +1403,12 @@ bad:			run_err("%s: %s", np, strerror(errno));
     if(tjfmode && tjffile(np)) {
       struct processor* histo = histogram();
       printf("[tjf] tjffile '%s' detected; ", np);
-      if(tjfholy) {
+      if(tjfmarching) {
+        printf("running MC as we transfer\n");
+        struct processor* mc = histogram(); /* hack, MC doesn't exist yet */
+        slice_transfer(remin, ofd, np, mc);
+        free(mc);
+      } else if(tjfholy) {
         printf("creating a hole-y file.\n");
         if(holy_transfer(remin, size, cp, bp, &statbytes, ofd, np, histo) != 0) {
           wrerr = YES;
