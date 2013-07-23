@@ -1108,8 +1108,7 @@ slice_transfer(int input, int ofd, const char* dsname, struct processor* proc)
       }
     }
     { /* run whatever processing elements the user wants. */
-      proc->run(proc, buffer, by_read/tds->bpc, tds->signedness == SIGNED,
-                tds->bpc);
+      proc->run(proc, buffer, by_read/tds->bpc);
     }
   }
   free(buffer);
@@ -1165,8 +1164,7 @@ holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
 
 
     { /* run whatever processing elements the user wants. */
-      proc->run(proc, cp, by_read/tds->bpc, tds->signedness == SIGNED,
-                tds->bpc);
+      proc->run(proc, cp, by_read/tds->bpc);
     }
 
     /* write data out to file. */
