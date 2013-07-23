@@ -5,11 +5,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef void (func_process)(void* self, const void* data, const size_t nelems,
-                            const bool is_signed, const size_t bpc);
+typedef void (func_init)(void* self, const bool is_signed, const size_t bpc);
+typedef void (func_process)(void* self, const void* data, const size_t nelems);
 typedef void (func_finished)(void* self);
 
 struct processor {
+  func_init* init;
   func_process* run;
   func_finished* fini;
 };

@@ -1008,6 +1008,8 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
   void* padding = malloc(tds->add_bytes);
   memset(padding, 0, tds->add_bytes);
 
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
+
   for(i=0; i < size; i += tds->scanline_size) {
     assert(i < size);
     const size_t sz = (uint64_t) size;
@@ -1044,8 +1046,7 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
     }
 
     { /* run whatever processing elements the user wants. */
-      proc->run(proc, padding, by_read/tds->bpc, tds->signedness == SIGNED,
-                tds->bpc);
+      proc->run(proc, padding, by_read/tds->bpc);
     }
   }
   free(padding);

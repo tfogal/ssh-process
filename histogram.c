@@ -13,10 +13,21 @@
 static const size_t HIST_SIZE = 65535;
 
 struct histoprocessor {
+  func_init* init;
   func_process* run;
   func_finished* fini;
   uint64_t* histo;
+  bool is_signed;
+  size_t bpc;
 };
+
+static void
+init(void* self, const bool is_signed, const size_t bpc)
+{
+  struct histoprocessor* hproc = (struct histoprocessor*) self;
+  hproc->is_signed = is_signed;
+  hproc->bpc = bpc;
+}
 
 #define INNER_HISTO_BIAS(type, bias) \
   do { \
@@ -27,14 +38,13 @@ struct histoprocessor {
     } \
   } while(0)
 
-static void histo(void* self, const void* d, const size_t nelems,
-                  const bool is_signed, const size_t bpc)
+static void histo(void* self, const void* d, const size_t nelems)
 {
   struct histoprocessor* this = (struct histoprocessor*) self;
   assert(this->histo != NULL);
-  switch(bpc) {
+  switch(this->bpc) {
     case 1:
-      if(is_signed) {
+      if(this->is_signed) {
         INNER_HISTO_BIAS(int8_t, -SCHAR_MIN);
         assert(SCHAR_MIN < 0);
       } else {
@@ -42,7 +52,7 @@ static void histo(void* self, const void* d, const size_t nelems,
       }
       break;
     case 2:
-      if(is_signed) {
+      if(this->is_signed) {
         INNER_HISTO_BIAS(int16_t, -SHRT_MIN);
         assert(SHRT_MAX < 0);
       } else {
@@ -71,6 +81,7 @@ static void writehisto(void* self) {
 
 struct processor* histogram() {
   struct histoprocessor* hist = calloc(sizeof(struct histoprocessor), 1);
+  hist->init = init;
   hist->run = histo;
   hist->fini = writehisto;
   hist->histo = calloc(sizeof(uint64_t), HIST_SIZE);
