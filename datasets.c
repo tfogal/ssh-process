@@ -7,7 +7,7 @@ struct dsinfo tjfds[] = {
   {"magnitude.nhdr.raw", 4050, 46, 2, UNSIGNED, {2025, 1600, 400}},
   /* nonsense, only for testing: */
   {"DynamicBrickingDS.cpp", 470, 42, 1, UNSIGNED, {470,1,1}},
-  {"smalldata", 248, 8, 2, UNSIGNED, {256,5,6}},
+  {"smalldata", 248, 8, 2, UNSIGNED, {81,10,5}},
 };
 size_t num_ds = sizeof(tjfds) / sizeof(tjfds[0]);
 
