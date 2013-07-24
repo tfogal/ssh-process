@@ -1,5 +1,6 @@
 #!/bin/sh
 
 ./configure \
+  CFLAGS="-ggdb" \
   --with-cflags="-std=gnu99" \
   $@
