@@ -1060,10 +1060,34 @@ size_t min(const size_t a, const size_t b) {
   return a < b ? a : b;
 }
 
+/* streams the data from the given FD to the output file descriptor.  data read
+ * is placed in 'buffer'.
+ * @param fd file descriptor to read from
+ * @param ofd file descriptor to write into
+ * @param buffer buffer to use for intermediate storage
+ * @param bytes number of bytes to read/write.
+ * @returns number of bytes read/written, or an error code. */
+ssize_t
+stream(int fd, int ofd, void* buffer, size_t bytes)
+{
+  const size_t bytes_read = atomicio(read, fd, buffer, bytes);
+  if(bytes_read == 0) {
+    run_err("%s", bytes_read != EPIPE ? strerror(errno) : "dropped connection");
+    return EINVAL;
+  }
+  const size_t bytes_written = tjfio(vwrite, ofd, buffer, bytes_read);
+  if(bytes_written != bytes_read) {
+    run_err("%s", "error writing data back out");
+    return EREMOTEIO;
+  }
+  return bytes_written;
+}
+
 /* similar to tjftransfer, but only calls the given processor when we have
  * cached up two slices worth of data. */
 static int
-slice_transfer(int input, int ofd, const char* dsname, struct processor* proc)
+slice_transfer(int input, const off_t size, int ofd, const char* dsname,
+               struct processor* proc)
 {
 	enum { YES, NO, } wrerr = NO;
 
@@ -1072,15 +1096,15 @@ slice_transfer(int input, int ofd, const char* dsname, struct processor* proc)
   const size_t slices = tds->dims[2];
   void* buffer = calloc(slice_size, 2);
 
-  fprintf(stderr, "[tjf] 2-slice-based transfer.\n");
+  printf("[tjf] 2-slice-based transfer.\n");
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
 
   assert(slices >= 2 && "can't prime like this; algorithm bad.");
+  assert(slice_size < (size_t)size && "prime would read whole data set");
   /* prime the buffer by reading one slice into the 2nd half of the buffer. */
   {
-    const size_t bytes_read = atomicio(read, input, buffer, slice_size);
-    if(bytes_read == 0) {
-      run_err("%s", bytes_read != EPIPE ? strerror(errno)
-                                        : "dropped connection");
+    if(stream(input, ofd, buffer, slice_size) <= 0) {
+      run_err("%s", strerror(errno));
       goto error;
     }
   }
@@ -1092,24 +1116,16 @@ slice_transfer(int input, int ofd, const char* dsname, struct processor* proc)
     /* copy right to left */
     memcpy(buffer, ((const char*)buffer)+slice_size, slice_size);
 
+    const size_t toread = min(slice_size, size - (slice*slice_size));
     /* read new slice into right half */
-    const size_t by_read = atomicio(read, input, (char*)buffer+slice_size,
-                                    slice_size);
-    assert(by_read <= slice_size);
-    if(by_read == 0) {
-      run_err("%s", by_read != EPIPE ? strerror(errno) : "dropped connection");
+    ssize_t bytes = stream(input, ofd, (char*)buffer+slice_size, toread);
+    if(bytes != (ssize_t)toread) {
+      run_err("%s", "error streaming data");
       goto error;
     }
-    {
-      const size_t bytes_written = tjfio(vwrite, ofd, buffer, by_read);
-      if(bytes_written != by_read) {
-        run_err("%s", "error writing data back out");
-        goto error;
-      }
-    }
-    { /* run whatever processing elements the user wants. */
-      proc->run(proc, buffer, by_read/tds->bpc);
-    }
+
+    /* execute processor on the slices we have now. */
+    proc->run(proc, buffer, bytes/tds->bpc);
   }
   free(buffer);
   if(proc->fini) {
@@ -1144,6 +1160,7 @@ holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
 
   fprintf(stderr, "[tjf] skipping %zu bytes (holes) for every %zu bytes.\n",
           tds->add_bytes, tds->scanline_size);
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
 
   for(i=0; i < size; i += tds->scanline_size) {
     assert(i < size);
@@ -1405,7 +1422,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
       if(tjfmarching) {
         printf("running MC as we transfer\n");
         struct processor* mc = histogram(); /* hack, MC doesn't exist yet */
-        slice_transfer(remin, ofd, np, mc);
+        slice_transfer(remin, size, ofd, np, mc);
         free(mc);
       } else if(tjfholy) {
         printf("creating a hole-y file.\n");
