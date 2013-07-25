@@ -5,7 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef void (func_init)(void* self, const bool is_signed, const size_t bpc);
+typedef void (func_init)(void* self, const bool is_signed, const size_t bpc,
+                         const size_t dims[3]);
 typedef void (func_process)(void* self, const void* data, const size_t nelems);
 typedef void (func_finished)(void* self);
 

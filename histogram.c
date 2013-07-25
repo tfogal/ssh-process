@@ -22,11 +22,12 @@ struct histoprocessor {
 };
 
 static void
-init(void* self, const bool is_signed, const size_t bpc)
+init(void* self, const bool is_signed, const size_t bpc, const size_t dims[3])
 {
   struct histoprocessor* hproc = (struct histoprocessor*) self;
   hproc->is_signed = is_signed;
   hproc->bpc = bpc;
+  (void)dims;
 }
 
 #define INNER_HISTO_BIAS(type, bias) \
@@ -72,7 +73,7 @@ static void writehisto(void* self) {
   const mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP;
   int fd = needopenmode(".histogram-u64", O_CREAT | O_TRUNC | O_WRONLY, mode);
   ssize_t bytes = write(fd, this->histo, sizeof(uint64_t)*HIST_SIZE);
-  if(bytes != sizeof(uint64_t)*HIST_SIZE) {
+  if((size_t)bytes != sizeof(uint64_t)*HIST_SIZE) {
     perror("short write");
     exit(EXIT_FAILURE);
   }

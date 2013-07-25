@@ -1008,7 +1008,7 @@ tjftransfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
   void* padding = malloc(tds->add_bytes);
   memset(padding, 0, tds->add_bytes);
 
-  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc, tds->dims);
 
   for(i=0; i < size; i += tds->scanline_size) {
     assert(i < size);
@@ -1097,7 +1097,7 @@ slice_transfer(int input, const off_t size, int ofd, const char* dsname,
   void* buffer = calloc(slice_size, 2);
 
   printf("[tjf] 2-slice-based transfer.\n");
-  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc, tds->dims);
 
   assert(slices >= 2 && "can't prime like this; algorithm bad.");
   assert(slice_size < (size_t)size && "prime would read whole data set");
@@ -1160,7 +1160,7 @@ holy_transfer(int input, const off_t size, char* cp, BUF* bp, off_t* statbytes,
 
   fprintf(stderr, "[tjf] skipping %zu bytes (holes) for every %zu bytes.\n",
           tds->add_bytes, tds->scanline_size);
-  proc->init(proc, tds->signedness == SIGNED, tds->bpc);
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc, tds->dims);
 
   for(i=0; i < size; i += tds->scanline_size) {
     assert(i < size);
