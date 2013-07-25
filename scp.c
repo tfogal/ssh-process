@@ -585,6 +585,7 @@ main(int argc, char **argv)
 				errs = 1;
 		}
 	}
+	free(__progname);
 	exit(errs != 0);
 }
 
