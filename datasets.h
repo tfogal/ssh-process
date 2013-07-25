@@ -14,9 +14,6 @@ struct dsinfo {
   size_t dims[3];
 };
 
-extern struct dsinfo tjfds[];
-extern size_t num_ds;
-
 extern struct dsinfo* tjf_findds(const char* filename);
 
 

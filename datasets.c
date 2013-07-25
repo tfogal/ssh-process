@@ -3,13 +3,13 @@
 #include <string.h>
 #include "datasets.h"
 
-struct dsinfo tjfds[] = {
+static struct dsinfo tjfds[] = {
   {"magnitude.nhdr.raw", 4050, 46, 2, UNSIGNED, {2025, 1600, 400}},
   /* nonsense, only for testing: */
   {"DynamicBrickingDS.cpp", 470, 42, 1, UNSIGNED, {470,1,1}},
   {"smalldata", 248, 8, 2, UNSIGNED, {81,10,5}},
 };
-size_t num_ds = sizeof(tjfds) / sizeof(tjfds[0]);
+static size_t num_ds = sizeof(tjfds) / sizeof(tjfds[0]);
 
 /* find the dataset for the given filename (if it exists) */
 struct dsinfo*
