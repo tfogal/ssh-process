@@ -135,7 +135,7 @@ $(SSHDOBJS): Makefile.in config.h
 
 LIBCOMPAT=openbsd-compat/libopenbsd-compat.a
 $(LIBCOMPAT): always
-	(cd openbsd-compat && $(MAKE))
+	$(MAKE) -C openbsd-compat --no-print-directory
 always:
 
 libssh.a: $(LIBSSH_OBJS)
