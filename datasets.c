@@ -21,10 +21,10 @@ tjf_findds(const char* filename) {
     snprintf(pre, len, "./%s", tjfds[i].filename);
     if(strcmp(tjfds[i].filename, filename) == 0 ||
        strcmp(pre, filename) == 0) {
-      free(pre);
+      free(pre); pre = NULL;
       return &tjfds[i];
     }
-    free(pre);
+    free(pre); pre = NULL;
   }
   return NULL;
 }
