@@ -168,6 +168,7 @@ static int tjfmarching = 0;
 #include "datasets.h"
 #include "functor.h"
 #include "histogram.h"
+#include "mcubes.h"
 
 /* hacky way to control which files get the transparent nulls created. */
 static int
@@ -1421,7 +1422,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
       printf("[tjf] tjffile '%s' detected; ", np);
       if(tjfmarching) {
         printf("running MC as we transfer\n");
-        struct processor* mc = histogram(); /* hack, MC doesn't exist yet */
+        struct processor* mc = mcubes();
         slice_transfer(remin, size, ofd, np, mc);
         free(mc);
       } else if(tjfholy) {
