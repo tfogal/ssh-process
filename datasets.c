@@ -8,6 +8,11 @@ static struct dsinfo tjfds[] = {
   /* nonsense, only for testing: */
   {"DynamicBrickingDS.cpp", 470, 42, 1, UNSIGNED, {470,1,1}},
   {"smalldata", 248, 8, 2, UNSIGNED, {81,10,5}},
+  {"16", 4096, 0, 2, UNSIGNED, {16, 16, 16}},
+  {"8", 1024, 0, 2, UNSIGNED, {8,8,8}},
+  {"4", 128, 0, 2, UNSIGNED, {4,4,4}},
+  {"2", 16, 0, 2, UNSIGNED, {2,2,2}},
+  {"3", 54, 0, 2, UNSIGNED, {3,3,3}},
 };
 static size_t num_ds = sizeof(tjfds) / sizeof(tjfds[0]);
 
