@@ -4396,6 +4396,11 @@ fi
 dnl Adding -Werror to CFLAGS early prevents configure tests from running.
 dnl Add now.
 CFLAGS="$CFLAGS $werror_flags"
+CXXFLAGS="$werror_flags -ggdb"
+CXXFLAGS="${CXXFLAGS} -Wall -Wpointer-arith -Wuninitialized -Wsign-compare "
+CXXFLAGS="${CXXFLAGS} -Wformat-security -Wno-unused-result "
+CXXFLAGS="${CXXFLAGS} -fno-strict-aliasing -D_FORTIFY_SOURCE=2 "
+CXXFLAGS="${CXXFLAGS} -fno-builtin-memset -fstack-protector-all -std=c++11"
 
 if test "x$ac_cv_func_getaddrinfo" != "xyes" ; then
 	TEST_SSH_IPV6=no
@@ -4404,6 +4409,7 @@ else
 fi
 AC_CHECK_DECL([BROKEN_GETADDRINFO],  [TEST_SSH_IPV6=no])
 AC_SUBST([TEST_SSH_IPV6], [$TEST_SSH_IPV6])
+AC_SUBST([CXXFLAGS])
 
 AC_EXEEXT
 AC_CONFIG_FILES([Makefile buildpkg.sh opensshd.init openssh.xml \
@@ -4470,7 +4476,8 @@ echo ""
 
 echo "              Host: ${host}"
 echo "          Compiler: ${CC}"
-echo "    Compiler flags: ${CFLAGS}"
+echo "  C Compiler flags: ${CFLAGS}"
+echo "CXX Compiler flags: ${CXXFLAGS}"
 echo "Preprocessor flags: ${CPPFLAGS}"
 echo "      Linker flags: ${LDFLAGS}"
 echo "         Libraries: ${LIBS}"

@@ -1474,6 +1474,9 @@
 /* platform uses an in-memory credentials cache */
 #undef USE_CCAPI
 
+/* Define if you want ConsoleKit support. */
+#undef USE_CONSOLEKIT
+
 /* Use libedit for sftp */
 #undef USE_LIBEDIT
 
@@ -1534,6 +1537,11 @@
 
 /* Define if xauth is found in your path */
 #undef XAUTH_PATH
+
+/* Enable large inode numbers on Mac OS X 10.5.  */
+#ifndef _DARWIN_USE_64_BIT_INODE
+# define _DARWIN_USE_64_BIT_INODE 1
+#endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 #undef _FILE_OFFSET_BITS
