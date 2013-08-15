@@ -80,7 +80,11 @@ static const char unit[] = " KMGT";
 static int
 can_output(void)
 {
+#if 0
 	return (getpgrp() == tcgetpgrp(STDOUT_FILENO));
+#else
+  return 0;
+#endif
 }
 
 static void
