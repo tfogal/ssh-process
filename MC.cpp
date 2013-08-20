@@ -142,7 +142,6 @@ public:
     virtual void Process(T TIsoValue);
 
 protected:
-    static int ms_edgeTable[256];
     static int ms_triTable[256][16];
 
     INTVECTOR3 m_vVolSize;
@@ -191,7 +190,7 @@ upper limits of
   5 triangles created per cell
 */
 
-template <class T> int MarchingCubes<T>::ms_edgeTable[256] = {
+static int edgeTable[256] = {
   0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
   0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
   0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -573,84 +572,84 @@ template <class T> void MarchingCubes<T>::MarchLayer(LayerTempData<T> *layer, in
 
       // get the coordinates for the vertices, compute the
       // triangulation and interpolate the normals
-      if (ms_edgeTable[cellIndex] &    1) {
+      if (edgeTable[cellIndex] &    1) {
         if (layer->piEdges[EDGE_INDEX(0, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[0]  = m_Isosurface->iVertices + MakeVertex(0, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[0] = layer->piEdges[EDGE_INDEX(0, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    2) {
+      if (edgeTable[cellIndex] &    2) {
         if (layer->piEdges[EDGE_INDEX(1, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[1]  = m_Isosurface->iVertices+MakeVertex(1, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[1] = layer->piEdges[EDGE_INDEX(1, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    4) {
+      if (edgeTable[cellIndex] &    4) {
         if (layer->piEdges[EDGE_INDEX(2, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[2]  = m_Isosurface->iVertices +MakeVertex(2, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[2] = layer->piEdges[EDGE_INDEX(2, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    8) {
+      if (edgeTable[cellIndex] &    8) {
         if (layer->piEdges[EDGE_INDEX(3, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[3]  = m_Isosurface->iVertices+MakeVertex(3, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[3] = layer->piEdges[EDGE_INDEX(3, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    16) {
+      if (edgeTable[cellIndex] &    16) {
         if (layer->piEdges[EDGE_INDEX(4, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[4]  = m_Isosurface->iVertices+MakeVertex(4, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[4] = layer->piEdges[EDGE_INDEX(4, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    32) {
+      if (edgeTable[cellIndex] &    32) {
         if (layer->piEdges[EDGE_INDEX(5, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[5]  = m_Isosurface->iVertices+MakeVertex(5, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[5] = layer->piEdges[EDGE_INDEX(5, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    64) {
+      if (edgeTable[cellIndex] &    64) {
         if (layer->piEdges[EDGE_INDEX(6, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[6]  = m_Isosurface->iVertices +MakeVertex(6, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[6] = layer->piEdges[EDGE_INDEX(6, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    128) {
+      if (edgeTable[cellIndex] &    128) {
         if (layer->piEdges[EDGE_INDEX(7, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[7]  = m_Isosurface->iVertices +MakeVertex(7, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[7] = layer->piEdges[EDGE_INDEX(7, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    256) {
+      if (edgeTable[cellIndex] &    256) {
         if (layer->piEdges[EDGE_INDEX(8, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[8]  = m_Isosurface->iVertices +MakeVertex(8, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[8] = layer->piEdges[EDGE_INDEX(8, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    512) {
+      if (edgeTable[cellIndex] &    512) {
         if (layer->piEdges[EDGE_INDEX(9, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[9]  = m_Isosurface->iVertices +MakeVertex(9, i, j, iLayer, sliceIsosurface);
         } else {
         cellVerts[9] = layer->piEdges[EDGE_INDEX(9, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    1024) {
+      if (edgeTable[cellIndex] &    1024) {
         if (layer->piEdges[EDGE_INDEX(10, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[10]  = m_Isosurface->iVertices +MakeVertex(10, i, j, iLayer, sliceIsosurface);
         } else {
           cellVerts[10] = layer->piEdges[EDGE_INDEX(10, i, j, m_vVolSize.x-1)];
         }
       }
-      if (ms_edgeTable[cellIndex] &    2048) {
+      if (edgeTable[cellIndex] &    2048) {
         if (layer->piEdges[EDGE_INDEX(11, i, j, m_vVolSize.x-1)] == NO_EDGE) {
           cellVerts[11]  = m_Isosurface->iVertices +MakeVertex(11, i, j, iLayer, sliceIsosurface);
         } else {
