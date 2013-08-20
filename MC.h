@@ -1,3 +1,7 @@
+#ifndef TJF_MC_H
+#define TJF_MC_H
+
+#include <stdio.h>
 
 #ifdef __cplusplus
 #	define CMARCH extern "C"
@@ -5,7 +9,14 @@
 #	define CMARCH /* no extern "C" needed */
 #endif
 
-CMARCH void march(const uint16_t* data, uint64_t layer, float isovalue);
+/** @returns the number of vertices processed in this iteration. */
+CMARCH size_t
+marchlayer(const uint16_t* data, const size_t dims[3],
+           uint64_t layer, float isovalue,
+           FILE* vertices, FILE* faces,
+           const size_t nvertices);
+
+#endif /* TJF_MC_H */
 /*
    For more information, please see: http://software.sci.utah.edu
 

@@ -1,4 +1,5 @@
-#include <iomanip>
+#include <cstring>
+#include <cinttypes>
 #include "MC.h"
 #include "Vectors.h"
 
@@ -9,35 +10,124 @@
 
 template <class T=float> class LayerTempData {
 public:
-    T*    pTBotData;
-    T*    pTTopData;
-    int*    piEdges;  // tag indexing into vertex list
+  const T* pTBotData;
+  const T* pTTopData;
+  int* piEdges;  // tag indexing into vertex list
 
-  LayerTempData<T>(INTVECTOR3 vVolSize, T* pTVolume);
-    virtual ~LayerTempData();
-    void NextIteration();
+  LayerTempData<T>(INTVECTOR3 vVolSize, const T* pTVolume);
+  virtual ~LayerTempData();
+  void NextIteration();
 
 private:
-    INTVECTOR3 m_vVolSize;
+  INTVECTOR3 m_vVolSize;
 };
 
 class Isosurface {
 public:
-    FLOATVECTOR3*   vfVertices;
-    FLOATVECTOR3*   vfNormals;
-    INTVECTOR3*     viTriangles;
-    int             iVertices;
-    int             iTriangles;
+    FLOATVECTOR3* vfVertices;
+    FLOATVECTOR3* vfNormals;
+    UINTVECTOR3* viTriangles;
+    size_t iVertices;
+    size_t iTriangles;
 
     Isosurface();
     Isosurface(int iMaxVertices, int iMaxTris);
     virtual ~Isosurface();
 
-    int AddTriangle(int a, int b, int c);
+    int AddTriangle(unsigned a, unsigned b, unsigned c);
     int AddVertex(FLOATVECTOR3 v, FLOATVECTOR3 n);
     void AppendData(const Isosurface* other);
     void Transform(const FLOATMATRIX4& matrix);
 };
+
+Isosurface::Isosurface() :
+  vfVertices(NULL),
+  vfNormals(NULL),
+  viTriangles(NULL),
+  iVertices(0),
+  iTriangles(0)
+{}
+
+Isosurface::Isosurface(int iMaxVertices, int iMaxTris) :
+  vfVertices(new VECTOR3<float>[iMaxVertices]),
+  vfNormals(new VECTOR3<float>[iMaxVertices]),
+  viTriangles(new VECTOR3<unsigned>[iMaxTris]),
+  iVertices(0),
+  iTriangles(0)
+{}
+
+Isosurface::~Isosurface() {
+  delete[] vfVertices;
+  delete[] vfNormals;
+  delete[] viTriangles;
+}
+
+int Isosurface::AddTriangle(unsigned a, unsigned b, unsigned c) {
+  viTriangles[iTriangles++] = VECTOR3<unsigned>(a,b,c);
+  return iTriangles-1;
+}
+
+int Isosurface::AddVertex(VECTOR3<float> v, VECTOR3<float> n) {
+  vfVertices[iVertices] = v;
+  vfNormals[iVertices++] = n;
+  return iVertices-1;
+}
+
+void Isosurface::AppendData(const Isosurface* other) {
+  // if verts in other, expand the storage this surface
+  if (other->iVertices > 0) {
+    // create new mem
+    VECTOR3<float>* temp_Vertices = new VECTOR3<float>[iVertices + other->iVertices];
+    VECTOR3<float>* temp_Normals = new VECTOR3<float>[iVertices + other->iVertices];
+    VECTOR3<unsigned>* temp_Triangles = new VECTOR3<unsigned>[iTriangles + other->iTriangles];
+
+    // copy "old" data
+    std::memcpy(temp_Vertices, vfVertices, sizeof(VECTOR3<float>)*iVertices);
+    std::memcpy(temp_Normals, vfNormals, sizeof(VECTOR3<float>)*iVertices);
+    std::memcpy(temp_Triangles, viTriangles, sizeof(VECTOR3<unsigned>)*iTriangles);
+
+    // append new data
+    std::memcpy(temp_Vertices+iVertices, other->vfVertices,
+                sizeof(VECTOR3<float>)*other->iVertices);
+    std::memcpy(temp_Normals+iVertices, other->vfNormals,
+                sizeof(VECTOR3<float>)*other->iVertices);
+    std::memcpy(temp_Triangles+iTriangles, other->viTriangles,
+                sizeof(VECTOR3<unsigned>)*other->iTriangles);
+
+    // delete "old" data
+    delete[] vfVertices;
+    delete[] vfNormals;
+    delete[] viTriangles;
+
+    // rename
+    vfVertices  = temp_Vertices;
+    vfNormals   = temp_Normals;
+    viTriangles = temp_Triangles;
+  }
+
+  // update this list's counters
+  iVertices  += other->iVertices;
+  iTriangles += other->iTriangles;
+}
+
+
+void Isosurface::Transform(const FLOATMATRIX4& matrix) {
+  FLOATMATRIX4 itMatrix = matrix.inverse();
+  itMatrix = itMatrix.Transpose();
+
+  for(size_t i = 0;i<iVertices;i++) {
+    FLOATVECTOR4  fVertex(vfVertices[i],1);
+    FLOATVECTOR4  fNormal(vfNormals[i],0);
+
+    fVertex  = fVertex * matrix;
+    fNormal  = fNormal * itMatrix;
+
+    vfVertices[i] = fVertex.xyz() / fVertex.w;
+
+    vfNormals[i] = fNormal.xyz();
+    vfNormals[i].normalize();
+  }
+}
 
 
 template <class T=float> class MarchingCubes {
@@ -47,20 +137,22 @@ public:
     MarchingCubes<T>(void);
     virtual ~MarchingCubes<T>(void);
 
-    virtual void SetVolume(int iSizeX, int iSizeY, int iSizeZ, T* pTVolume);
+    virtual void SetVolume(int iSizeX, int iSizeY, int iSizeZ,
+                           const T* pTVolume);
     virtual void Process(T TIsoValue);
 
 protected:
-    static int      ms_edgeTable[256];
-    static int      ms_triTable[256][16];
+    static int ms_edgeTable[256];
+    static int ms_triTable[256][16];
 
-    INTVECTOR3    m_vVolSize;
-    INTVECTOR3    m_vOffset;
-    T*            m_pTVolume;
-    T             m_TIsoValue;
+    INTVECTOR3 m_vVolSize;
+    INTVECTOR3 m_vOffset;
+    const T* m_pTVolume;
+    T m_TIsoValue;
 
     virtual void MarchLayer(LayerTempData<T> *layer, int iLayer);
-    virtual int MakeVertex(int whichEdge, int i, int j, int k, Isosurface* sliceIso);
+    virtual int MakeVertex(int whichEdge, int i, int j, int k,
+                           Isosurface* sliceIso);
     virtual FLOATVECTOR3 InterpolateNormal(T fValueAtPos, INTVECTOR3 vPosition);
 };
 /*
@@ -69,7 +161,6 @@ protected:
 
   The indexing of vertices and edges in a cube are defined
   as:
-
                 _4____________4_____________5
                /|                           /
               / |                          /|
@@ -92,7 +183,6 @@ protected:
        |  /                         | /
        | /                          |/
        |/3____________2_____________|2
-
 
 For purposes of calculating vertices along the edges and the
 triangulations created, there are 15 distinct cases, with
@@ -407,7 +497,9 @@ template <class T> MarchingCubes<T>::~MarchingCubes(void)
   delete m_Isosurface;
 }
 
-template <class T> void MarchingCubes<T>::SetVolume(int iSizeX, int iSizeY, int iSizeZ, T* pTVolume)
+template <class T> void
+MarchingCubes<T>::SetVolume(int iSizeX, int iSizeY, int iSizeZ,
+                            const T* pTVolume)
 {
   m_pTVolume  = pTVolume;
   m_vVolSize  = INTVECTOR3(iSizeX, iSizeY, iSizeZ);
@@ -432,6 +524,8 @@ template <class T> void MarchingCubes<T>::Process(T TIsoValue)
   // march the first layer
   MarchLayer(layerData, 0);
 
+#if 0
+  /* tjf: we do this externally, now, by calling this for each new layer. */
   // now do the remaining layers
   for (int iZ = 1; iZ < m_vVolSize.z - 1; iZ++) {
     // prepare the temp data to be used in the next layer
@@ -439,6 +533,7 @@ template <class T> void MarchingCubes<T>::Process(T TIsoValue)
     // march the next layer
     MarchLayer(layerData, iZ);
   }
+#endif
 
   // delete the layer dataset
   delete layerData;
@@ -589,15 +684,14 @@ template <class T> void MarchingCubes<T>::MarchLayer(LayerTempData<T> *layer, in
       // store the vertex indices in the triangle data structure
       int iTableIndex = 0;
       while (ms_triTable[cellIndex][iTableIndex] != -1) {
+        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+0]] >= 0);
+        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+1]] >= 0);
+        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+2]] >= 0);
         sliceIsosurface->AddTriangle(
           cellVerts[ms_triTable[cellIndex][iTableIndex+0]],
           cellVerts[ms_triTable[cellIndex][iTableIndex+1]],
           cellVerts[ms_triTable[cellIndex][iTableIndex+2]]
         );
-        printf("triangle: %u %u %u\n",
-               cellVerts[ms_triTable[cellIndex][iTableIndex+0]],
-               cellVerts[ms_triTable[cellIndex][iTableIndex+1]],
-               cellVerts[ms_triTable[cellIndex][iTableIndex+2]]);
         iTableIndex+=3;
       }
     }
@@ -732,9 +826,8 @@ MarchingCubes<T>::InterpolateNormal(T fValueAtPos, INTVECTOR3 vPosition) {
   return ret;
 }
 
-
-
-template <class T> LayerTempData<T>::LayerTempData(VECTOR3<int> vVolSize, T* pTVolume) {
+template <class T>
+LayerTempData<T>::LayerTempData(VECTOR3<int> vVolSize, const T* pTVolume) {
   m_vVolSize = vVolSize;
 
   pTBotData = pTVolume;
@@ -749,7 +842,7 @@ template <class T> LayerTempData<T>::LayerTempData(VECTOR3<int> vVolSize, T* pTV
 }
 
 template <class T> LayerTempData<T>::~LayerTempData() {
-  delete [] piEdges;
+  delete[] piEdges;
 }
 
 template <class T> void LayerTempData<T>::NextIteration() {
@@ -761,7 +854,8 @@ template <class T> void LayerTempData<T>::NextIteration() {
   for (int iY = 0; iY < m_vVolSize.y-1; iY++) {
     for (int iX = 0; iX < m_vVolSize.x-1; iX++) {
       for (int iEdges = 0; iEdges < 4; iEdges++) {
-        piEdges[EDGE_INDEX(iEdges, iX, iY, m_vVolSize.x-1)] =  piEdges[EDGE_INDEX(iEdges+4, iX, iY, m_vVolSize.x-1)];
+        piEdges[EDGE_INDEX(iEdges, iX, iY, m_vVolSize.x-1)] =
+          piEdges[EDGE_INDEX(iEdges+4, iX, iY, m_vVolSize.x-1)];
       }
       // reinitialize all of the remaining edges
       for (int iEdges = 4; iEdges < 12; iEdges++) {
@@ -770,6 +864,32 @@ template <class T> void LayerTempData<T>::NextIteration() {
     }
   }
 }
+
+/** @returns the number of vertices processed in this iteration. */
+CMARCH size_t
+marchlayer(const uint16_t* data, const size_t dims[3],
+           uint64_t layer, float isovalue,
+           FILE* vertices, FILE* faces,
+           const size_t nvertices)
+{
+  MarchingCubes<uint16_t> mc;
+  mc.SetVolume(dims[0], dims[1], dims[2], data);
+  mc.Process(isovalue);
+  const Isosurface* iso = mc.m_Isosurface;
+  for(size_t vert=0; vert < iso->iVertices; ++vert) {
+    fprintf(vertices, "v %f %f %f\n", iso->vfVertices[vert][0],
+            iso->vfVertices[vert][1], iso->vfVertices[vert][2]);
+  }
+  for(size_t tri=0; tri < iso->iTriangles; ++tri) {
+    /* OBJ indices are 1-based. */
+    fprintf(faces, "f %zu %zu %zu\n",
+            nvertices + size_t(iso->viTriangles[tri][0] + 1),
+            nvertices + size_t(iso->viTriangles[tri][1] + 1),
+            nvertices + size_t(iso->viTriangles[tri][2] + 1));
+  }
+  return iso->iVertices;
+}
+
 /*
    For more information, please see: http://software.sci.utah.edu
 

@@ -151,7 +151,7 @@ sshd$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHDOBJS)
 
 scp$(EXEEXT): $(LIBCOMPAT) libssh.a scp.o progressmeter.o \
 	datasets.o histogram.o mcubes.o tjf/readoptions/need.o MC.o
-	$(LD) -o $@ scp.o progressmeter.o bufaux.o datasets.o histogram.o mcubes.o tjf/readoptions/need.o $(LDFLAGS) -lssh -lopenbsd-compat $(LIBS)
+	$(CXX) -o $@ scp.o progressmeter.o bufaux.o datasets.o histogram.o mcubes.o tjf/readoptions/need.o MC.o $(LDFLAGS) -lssh -lopenbsd-compat $(LIBS)
 
 ssh-add$(EXEEXT): $(LIBCOMPAT) libssh.a ssh-add.o
 	$(LD) -o $@ ssh-add.o $(LDFLAGS) -lssh -lopenbsd-compat $(LIBS)

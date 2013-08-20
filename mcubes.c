@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "mcubes.h"
+#include "MC.h"
 
 struct mcubes {
   func_init* init;
@@ -704,7 +705,7 @@ emit_faces1(struct mcubes* this, size_t n, const unsigned below,
       }                                                                        \
     }
 
-static void
+void
 marching1(void* self, const uint16_t* data, const size_t dims[3],
           const float isovalue)
 {
@@ -1000,7 +1001,12 @@ march(void* self, const void* d, const size_t nelems)
         marching(this->dims, this->isoval);
       } else {
         const uint16_t* data = (const uint16_t*) d;
-        marching1(this, data, this->dims, this->isoval);
+        /*marching1(this, data, this->dims, this->isoval); */
+        this->n_vertices += marchlayer(data, this->dims, this->slice,
+                                       this->isoval, this->vertices,
+                                       this->faces, this->n_vertices);
+        fprintf(this->faces, "# slice %zu\n", this->slice);
+        fprintf(this->vertices, "# slice %zu\n", this->slice);
       }
       break;
     default: abort(); /* unimplemented. */ break;
