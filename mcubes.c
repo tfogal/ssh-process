@@ -989,24 +989,27 @@ march(void* self, const void* d, const size_t nelems)
     case 1:
       if(this->is_signed) {
         const int8_t* data = (const int8_t*) d;
-        marching(this->dims, this->isoval);
+        this->n_vertices += marchlayer8(data, this->dims, this->slice,
+                                        this->isoval, this->vertices,
+                                        this->faces, this->n_vertices);
       } else {
         const uint8_t* data = (const uint8_t*) d;
-        marching(this->dims, this->isoval);
+        this->n_vertices += marchlayeru8(data, this->dims, this->slice,
+                                         this->isoval, this->vertices,
+                                         this->faces, this->n_vertices);
       }
       break;
     case 2:
       if(this->is_signed) {
         const int16_t* data = (const int16_t*) d;
-        marching(this->dims, this->isoval);
+        this->n_vertices += marchlayer16(data, this->dims, this->slice,
+                                         this->isoval, this->vertices,
+                                         this->faces, this->n_vertices);
       } else {
         const uint16_t* data = (const uint16_t*) d;
-        /*marching1(this, data, this->dims, this->isoval); */
-        this->n_vertices += marchlayer(data, this->dims, this->slice,
-                                       this->isoval, this->vertices,
-                                       this->faces, this->n_vertices);
-        fprintf(this->faces, "# slice %zu\n", this->slice);
-        fprintf(this->vertices, "# slice %zu\n", this->slice);
+        this->n_vertices += marchlayeru16(data, this->dims, this->slice,
+                                          this->isoval, this->vertices,
+                                          this->faces, this->n_vertices);
       }
       break;
     default: abort(); /* unimplemented. */ break;

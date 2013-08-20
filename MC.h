@@ -1,6 +1,7 @@
 #ifndef TJF_MC_H
 #define TJF_MC_H
 
+#include <inttypes.h>
 #include <stdio.h>
 
 #ifdef __cplusplus
@@ -11,10 +12,25 @@
 
 /** @returns the number of vertices processed in this iteration. */
 CMARCH size_t
-marchlayer(const uint16_t* data, const size_t dims[3],
-           uint64_t layer, float isovalue,
-           FILE* vertices, FILE* faces,
-           const size_t nvertices);
+marchlayeru16(const uint16_t* data, const size_t dims[3],
+              uint64_t layer, float isovalue,
+              FILE* vertices, FILE* faces,
+              const uint64_t nvertices);
+CMARCH size_t
+marchlayer16(const int16_t* data, const size_t dims[3],
+             uint64_t layer, float isovalue,
+             FILE* vertices, FILE* faces,
+             const uint64_t nvertices);
+CMARCH size_t
+marchlayeru8(const uint8_t* data, const size_t dims[3],
+             uint64_t layer, float isovalue,
+             FILE* vertices, FILE* faces,
+             const uint64_t nvertices);
+CMARCH size_t
+marchlayer8(const int8_t* data, const size_t dims[3],
+            uint64_t layer, float isovalue,
+            FILE* vertices, FILE* faces,
+            const uint64_t nvertices);
 
 #endif /* TJF_MC_H */
 /*

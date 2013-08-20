@@ -864,14 +864,11 @@ template <class T> void LayerTempData<T>::NextIteration() {
   }
 }
 
-/** @returns the number of vertices processed in this iteration. */
-CMARCH size_t
-marchlayer(const uint16_t* data, const size_t dims[3],
-           uint64_t layer, float isovalue,
-           FILE* vertices, FILE* faces,
-           const size_t nvertices)
+template<typename T> size_t
+marchlayer(const T* data, const size_t dims[3], uint64_t layer, float isovalue,
+           FILE* vertices, FILE* faces, const uint64_t nvertices)
 {
-  MarchingCubes<uint16_t> mc;
+  MarchingCubes<T> mc;
   mc.SetVolume(dims[0], dims[1], dims[2], data);
   mc.Process(isovalue);
   const Isosurface* iso = mc.m_Isosurface;
@@ -881,12 +878,50 @@ marchlayer(const uint16_t* data, const size_t dims[3],
   }
   for(size_t tri=0; tri < iso->iTriangles; ++tri) {
     /* OBJ indices are 1-based. */
-    fprintf(faces, "f %zu %zu %zu\n",
-            nvertices + size_t(iso->viTriangles[tri][0] + 1),
-            nvertices + size_t(iso->viTriangles[tri][1] + 1),
-            nvertices + size_t(iso->viTriangles[tri][2] + 1));
+    fprintf(faces, "f %lu %lu %lu\n",
+            nvertices + (iso->viTriangles[tri][0] + 1),
+            nvertices + (iso->viTriangles[tri][1] + 1),
+            nvertices + (iso->viTriangles[tri][2] + 1));
   }
   return iso->iVertices;
+}
+
+/** @returns the number of vertices processed in this iteration. */
+CMARCH size_t
+marchlayeru16(const uint16_t* data, const size_t dims[3],
+              uint64_t layer, float isovalue,
+              FILE* vertices, FILE* faces,
+              const uint64_t nvertices)
+{
+  return marchlayer<uint16_t>(data, dims, layer, isovalue, vertices, faces,
+                              nvertices);
+}
+CMARCH size_t
+marchlayer16(const int16_t* data, const size_t dims[3],
+             uint64_t layer, float isovalue,
+             FILE* vertices, FILE* faces,
+             const uint64_t nvertices)
+{
+  return marchlayer<int16_t>(data, dims, layer, isovalue, vertices, faces,
+                             nvertices);
+}
+CMARCH size_t
+marchlayeru8(const uint8_t* data, const size_t dims[3],
+             uint64_t layer, float isovalue,
+             FILE* vertices, FILE* faces,
+             const uint64_t nvertices)
+{
+  return marchlayer<uint8_t>(data, dims, layer, isovalue, vertices, faces,
+                             nvertices);
+}
+CMARCH size_t
+marchlayer8(const int8_t* data, const size_t dims[3],
+            uint64_t layer, float isovalue,
+            FILE* vertices, FILE* faces,
+            const uint64_t nvertices)
+{
+  return marchlayer<int8_t>(data, dims, layer, isovalue, vertices, faces,
+                            nvertices);
 }
 
 /*
