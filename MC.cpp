@@ -142,8 +142,6 @@ public:
     virtual void Process(T TIsoValue);
 
 protected:
-    static int ms_triTable[256][16];
-
     INTVECTOR3 m_vVolSize;
     INTVECTOR3 m_vOffset;
     const T* m_pTVolume;
@@ -225,7 +223,7 @@ static int edgeTable[256] = {
   0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
 };
 
-template <class T> int MarchingCubes<T>::ms_triTable[256][16] = {
+static int triTable[256][16] = {
 {NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE},
  {0, 8, 3, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE},
  {0, 1, 9, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE},
@@ -682,14 +680,14 @@ template <class T> void MarchingCubes<T>::MarchLayer(LayerTempData<T> *layer, in
 
       // store the vertex indices in the triangle data structure
       int iTableIndex = 0;
-      while (ms_triTable[cellIndex][iTableIndex] != -1) {
-        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+0]] >= 0);
-        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+1]] >= 0);
-        assert(cellVerts[ms_triTable[cellIndex][iTableIndex+2]] >= 0);
+      while (triTable[cellIndex][iTableIndex] != -1) {
+        assert(cellVerts[triTable[cellIndex][iTableIndex+0]] >= 0);
+        assert(cellVerts[triTable[cellIndex][iTableIndex+1]] >= 0);
+        assert(cellVerts[triTable[cellIndex][iTableIndex+2]] >= 0);
         sliceIsosurface->AddTriangle(
-          cellVerts[ms_triTable[cellIndex][iTableIndex+0]],
-          cellVerts[ms_triTable[cellIndex][iTableIndex+1]],
-          cellVerts[ms_triTable[cellIndex][iTableIndex+2]]
+          cellVerts[triTable[cellIndex][iTableIndex+0]],
+          cellVerts[triTable[cellIndex][iTableIndex+1]],
+          cellVerts[triTable[cellIndex][iTableIndex+2]]
         );
         iTableIndex+=3;
       }
