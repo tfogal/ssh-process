@@ -24,169 +24,169 @@ private:
 
 class Isosurface {
 public:
-		FLOATVECTOR3* vfVertices;
-		FLOATVECTOR3* vfNormals;
-		UINTVECTOR3* viTriangles;
-		size_t iVertices;
-		size_t iTriangles;
+    FLOATVECTOR3* vfVertices;
+    FLOATVECTOR3* vfNormals;
+    UINTVECTOR3* viTriangles;
+    size_t iVertices;
+    size_t iTriangles;
 
-		Isosurface();
-		Isosurface(int iMaxVertices, int iMaxTris);
-		virtual ~Isosurface();
+    Isosurface();
+    Isosurface(int iMaxVertices, int iMaxTris);
+    virtual ~Isosurface();
 
-		int AddTriangle(unsigned a, unsigned b, unsigned c);
-		int AddVertex(FLOATVECTOR3 v, FLOATVECTOR3 n);
-		void AppendData(const Isosurface* other);
-		void Transform(const FLOATMATRIX4& matrix);
+    int AddTriangle(unsigned a, unsigned b, unsigned c);
+    int AddVertex(FLOATVECTOR3 v, FLOATVECTOR3 n);
+    void AppendData(const Isosurface* other);
+    void Transform(const FLOATMATRIX4& matrix);
 };
 
 Isosurface::Isosurface() :
-	vfVertices(NULL),
-	vfNormals(NULL),
-	viTriangles(NULL),
-	iVertices(0),
-	iTriangles(0)
+  vfVertices(NULL),
+  vfNormals(NULL),
+  viTriangles(NULL),
+  iVertices(0),
+  iTriangles(0)
 {}
 
 Isosurface::Isosurface(int iMaxVertices, int iMaxTris) :
-	vfVertices(new VECTOR3<float>[iMaxVertices]),
-	vfNormals(new VECTOR3<float>[iMaxVertices]),
-	viTriangles(new VECTOR3<unsigned>[iMaxTris]),
-	iVertices(0),
-	iTriangles(0)
+  vfVertices(new VECTOR3<float>[iMaxVertices]),
+  vfNormals(new VECTOR3<float>[iMaxVertices]),
+  viTriangles(new VECTOR3<unsigned>[iMaxTris]),
+  iVertices(0),
+  iTriangles(0)
 {}
 
 Isosurface::~Isosurface() {
-	delete[] vfVertices;
-	delete[] vfNormals;
-	delete[] viTriangles;
+  delete[] vfVertices;
+  delete[] vfNormals;
+  delete[] viTriangles;
 }
 
 int Isosurface::AddTriangle(unsigned a, unsigned b, unsigned c) {
-	viTriangles[iTriangles++] = VECTOR3<unsigned>(a,b,c);
-	return iTriangles-1;
+  viTriangles[iTriangles++] = VECTOR3<unsigned>(a,b,c);
+  return iTriangles-1;
 }
 
 int Isosurface::AddVertex(VECTOR3<float> v, VECTOR3<float> n) {
-	vfVertices[iVertices] = v;
-	vfNormals[iVertices++] = n;
-	return iVertices-1;
+  vfVertices[iVertices] = v;
+  vfNormals[iVertices++] = n;
+  return iVertices-1;
 }
 
 void Isosurface::AppendData(const Isosurface* other) {
-	// if verts in other, expand the storage this surface
-	if (other->iVertices > 0) {
-		// create new mem
-		VECTOR3<float>* temp_Vertices = new VECTOR3<float>[iVertices + other->iVertices];
-		VECTOR3<float>* temp_Normals = new VECTOR3<float>[iVertices + other->iVertices];
-		VECTOR3<unsigned>* temp_Triangles = new VECTOR3<unsigned>[iTriangles + other->iTriangles];
+  // if verts in other, expand the storage this surface
+  if (other->iVertices > 0) {
+    // create new mem
+    VECTOR3<float>* temp_Vertices = new VECTOR3<float>[iVertices + other->iVertices];
+    VECTOR3<float>* temp_Normals = new VECTOR3<float>[iVertices + other->iVertices];
+    VECTOR3<unsigned>* temp_Triangles = new VECTOR3<unsigned>[iTriangles + other->iTriangles];
 
-		// copy "old" data
-		std::memcpy(temp_Vertices, vfVertices, sizeof(VECTOR3<float>)*iVertices);
-		std::memcpy(temp_Normals, vfNormals, sizeof(VECTOR3<float>)*iVertices);
-		std::memcpy(temp_Triangles, viTriangles, sizeof(VECTOR3<unsigned>)*iTriangles);
+    // copy "old" data
+    std::memcpy(temp_Vertices, vfVertices, sizeof(VECTOR3<float>)*iVertices);
+    std::memcpy(temp_Normals, vfNormals, sizeof(VECTOR3<float>)*iVertices);
+    std::memcpy(temp_Triangles, viTriangles, sizeof(VECTOR3<unsigned>)*iTriangles);
 
-		// append new data
-		std::memcpy(temp_Vertices+iVertices, other->vfVertices,
-								sizeof(VECTOR3<float>)*other->iVertices);
-		std::memcpy(temp_Normals+iVertices, other->vfNormals,
-								sizeof(VECTOR3<float>)*other->iVertices);
-		std::memcpy(temp_Triangles+iTriangles, other->viTriangles,
-								sizeof(VECTOR3<unsigned>)*other->iTriangles);
+    // append new data
+    std::memcpy(temp_Vertices+iVertices, other->vfVertices,
+                sizeof(VECTOR3<float>)*other->iVertices);
+    std::memcpy(temp_Normals+iVertices, other->vfNormals,
+                sizeof(VECTOR3<float>)*other->iVertices);
+    std::memcpy(temp_Triangles+iTriangles, other->viTriangles,
+                sizeof(VECTOR3<unsigned>)*other->iTriangles);
 
-		// delete "old" data
-		delete[] vfVertices;
-		delete[] vfNormals;
-		delete[] viTriangles;
+    // delete "old" data
+    delete[] vfVertices;
+    delete[] vfNormals;
+    delete[] viTriangles;
 
-		// rename
-		vfVertices  = temp_Vertices;
-		vfNormals   = temp_Normals;
-		viTriangles = temp_Triangles;
-	}
+    // rename
+    vfVertices  = temp_Vertices;
+    vfNormals   = temp_Normals;
+    viTriangles = temp_Triangles;
+  }
 
-	// update this list's counters
-	iVertices  += other->iVertices;
-	iTriangles += other->iTriangles;
+  // update this list's counters
+  iVertices  += other->iVertices;
+  iTriangles += other->iTriangles;
 }
 
 
 void Isosurface::Transform(const FLOATMATRIX4& matrix) {
-	FLOATMATRIX4 itMatrix = matrix.inverse();
-	itMatrix = itMatrix.Transpose();
+  FLOATMATRIX4 itMatrix = matrix.inverse();
+  itMatrix = itMatrix.Transpose();
 
-	for(size_t i = 0;i<iVertices;i++) {
-		FLOATVECTOR4  fVertex(vfVertices[i],1);
-		FLOATVECTOR4  fNormal(vfNormals[i],0);
+  for(size_t i = 0;i<iVertices;i++) {
+    FLOATVECTOR4  fVertex(vfVertices[i],1);
+    FLOATVECTOR4  fNormal(vfNormals[i],0);
 
-		fVertex  = fVertex * matrix;
-		fNormal  = fNormal * itMatrix;
+    fVertex  = fVertex * matrix;
+    fNormal  = fNormal * itMatrix;
 
-		vfVertices[i] = fVertex.xyz() / fVertex.w;
+    vfVertices[i] = fVertex.xyz() / fVertex.w;
 
-		vfNormals[i] = fNormal.xyz();
-		vfNormals[i].normalize();
-	}
+    vfNormals[i] = fNormal.xyz();
+    vfNormals[i].normalize();
+  }
 }
 
 template <class T=float> class MarchingCubes {
 public:
-		Isosurface*     m_Isosurface;
+    Isosurface*     m_Isosurface;
 
-		MarchingCubes<T>(void);
-		virtual ~MarchingCubes<T>(void);
+    MarchingCubes<T>(void);
+    virtual ~MarchingCubes<T>(void);
 
-		virtual void SetVolume(int iSizeX, int iSizeY, int iSizeZ,
-													 const T* pTVolume);
-		virtual void Process(T TIsoValue);
+    virtual void SetVolume(int iSizeX, int iSizeY, int iSizeZ,
+                           const T* pTVolume);
+    virtual void Process(T TIsoValue);
     uint64_t slice_number;
 
 protected:
-		INTVECTOR3 m_vVolSize;
-		INTVECTOR3 m_vOffset;
-		const T* m_pTVolume;
-		T m_TIsoValue;
+    INTVECTOR3 m_vVolSize;
+    INTVECTOR3 m_vOffset;
+    const T* m_pTVolume;
+    T m_TIsoValue;
 
-		virtual void MarchLayer(LayerTempData<T> *layer, int iLayer);
-		virtual int MakeVertex(int whichEdge, int i, int j, int k,
-													 Isosurface* sliceIso);
-		virtual FLOATVECTOR3 InterpolateNormal(T fValueAtPos,
-																					 INTVECTOR3 vPosition);
+    virtual void MarchLayer(LayerTempData<T> *layer, int iLayer);
+    virtual int MakeVertex(int whichEdge, int i, int j, int k,
+                           Isosurface* sliceIso);
+    virtual FLOATVECTOR3 InterpolateNormal(T fValueAtPos,
+                                           INTVECTOR3 vPosition);
 };
 /*
-	these tables for computing the Marching Cubes algorithm
-	are Paul Bourke, based on code by Cory Gene Bloyd.
+  these tables for computing the Marching Cubes algorithm
+  are Paul Bourke, based on code by Cory Gene Bloyd.
 
-	The indexing of vertices and edges in a cube are defined
-	as:
-								_4____________4_____________5
-							 /|                           /
-							/ |                          /|
-						 /  |                         / |
-						7   |                        /  |
-					 /    |                       /5  |
-					/     |                      /    |
-				 /      8                     /     9
-				/       |                    /      |
-			7/________|______6____________/6      |
-			 |        |                   |       |
-			 |        |                   |       |
-			 |        |                   |       |
-			 |        |0____________0_____|_______|1
-			11       /                    |      /
-			 |      /                    10     /
-			 |     /                      |    /
-			 |    /3                      |   /1
-			 |   /                        |  /
-			 |  /                         | /
-			 | /                          |/
-			 |/3____________2_____________|2
+  The indexing of vertices and edges in a cube are defined
+  as:
+                _4____________4_____________5
+               /|                           /
+              / |                          /|
+             /  |                         / |
+            7   |                        /  |
+           /    |                       /5  |
+          /     |                      /    |
+         /      8                     /     9
+        /       |                    /      |
+      7/________|______6____________/6      |
+       |        |                   |       |
+       |        |                   |       |
+       |        |                   |       |
+       |        |0____________0_____|_______|1
+      11       /                    |      /
+       |      /                    10     /
+       |     /                      |    /
+       |    /3                      |   /1
+       |   /                        |  /
+       |  /                         | /
+       | /                          |/
+       |/3____________2_____________|2
 
 For purposes of calculating vertices along the edges and the
 triangulations created, there are 15 distinct cases, with
 upper limits of
-	12 edge intersections
-	5 triangles created per cell
+  12 edge intersections
+  5 triangles created per cell
 */
 
 static int16_t edgeTable[256] = {
