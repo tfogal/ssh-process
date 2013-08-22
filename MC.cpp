@@ -139,6 +139,7 @@ public:
 		virtual void SetVolume(int iSizeX, int iSizeY, int iSizeZ,
 													 const T* pTVolume);
 		virtual void Process(T TIsoValue);
+    uint64_t slice_number;
 
 protected:
 		INTVECTOR3 m_vVolSize;
@@ -489,6 +490,7 @@ template <class T> MarchingCubes<T>::MarchingCubes(void)
   m_vVolSize    = INTVECTOR3(0,0,0);
   m_pTVolume    = NULL;
   m_Isosurface  = NULL;
+  this->slice_number = 0;
 }
 
 template <class T> MarchingCubes<T>::~MarchingCubes(void)
@@ -748,9 +750,15 @@ MarchingCubes<T>::MakeVertex(int iEdgeIndex, int i, int j, int k,
 
   // interpolate the vertex
   FLOATVECTOR3 vVertex = FLOATVECTOR3(vFrom) + d * FLOATVECTOR3(vTo - vFrom);
+  // since we're doing our weird slice-by-slice stuff, the values appear
+  // projected to the plane touching the origin; push them back to the current
+  // slice we're on.
+  vVertex.z = vVertex.z + this->slice_number;
 
   // now determine the gradients at the endpoints of the edge
   // and interpolate the normal for the isosurface vertex
+#if 0
+  // we don't end up outputting the normal anyway.
   FLOATVECTOR3  vNormFrom = InterpolateNormal(fFromValue,vFrom);
   FLOATVECTOR3  vNormTo   = InterpolateNormal(  fToValue,  vTo);
 
@@ -765,6 +773,9 @@ MarchingCubes<T>::MakeVertex(int iEdgeIndex, int i, int j, int k,
   // insert the vertex and normal into the isosurface structure and
   // return the index for this vertex
   return sliceIso->AddVertex(vVertex, vNormal);
+#else
+  return sliceIso->AddVertex(vVertex, FLOATVECTOR3());
+#endif
 }
 
 
@@ -869,6 +880,7 @@ marchlayer(const T* data, const size_t dims[3], uint64_t layer, float isovalue,
            FILE* vertices, FILE* faces, const uint64_t nvertices)
 {
   MarchingCubes<T> mc;
+  mc.slice_number = layer;
   mc.SetVolume(dims[0], dims[1], dims[2], data);
   mc.Process(isovalue);
   const Isosurface* iso = mc.m_Isosurface;
