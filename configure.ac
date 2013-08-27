@@ -4401,6 +4401,7 @@ CXXFLAGS="${CXXFLAGS} -Wall -Wpointer-arith -Wuninitialized -Wsign-compare "
 CXXFLAGS="${CXXFLAGS} -Wformat-security -Wno-unused-result "
 CXXFLAGS="${CXXFLAGS} -fno-strict-aliasing -D_FORTIFY_SOURCE=2 "
 CXXFLAGS="${CXXFLAGS} -fno-builtin-memset -fstack-protector-all -std=c++11"
+CXXFLAGS="${CXXFLAGS} --coverage -pg"
 
 if test "x$ac_cv_func_getaddrinfo" != "xyes" ; then
 	TEST_SSH_IPV6=no

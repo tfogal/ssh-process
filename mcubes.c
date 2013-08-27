@@ -214,8 +214,8 @@ test_sort_points()
     {11.0f, 0.1f, 0.1f},
   };
   sort_points(a, 12);
-  print_points(a, 12);
 #if 0
+  print_points(a, 12);
   assert(equalf(abc[0][0], 0.0f));
   assert(equalf(abc[5][0], 5.0f));
   assert(equalf(abc[10][0], 10.0f));
