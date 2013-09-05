@@ -25,8 +25,8 @@ private:
 class Isosurface {
 public:
     std::vector<FLOATVECTOR3> vfVertices;
-    FLOATVECTOR3* vfNormals;
-    UINTVECTOR3* viTriangles;
+    std::vector<FLOATVECTOR3> vfNormals;
+    std::vector<UINTVECTOR3> viTriangles;
     size_t iVertices;
     size_t iTriangles;
 
@@ -41,65 +41,56 @@ public:
 };
 
 Isosurface::Isosurface() :
-  vfNormals(NULL),
-  viTriangles(NULL),
   iVertices(0),
   iTriangles(0)
 {}
 
 Isosurface::Isosurface(int iMaxVertices, int iMaxTris) :
-  vfNormals(new VECTOR3<float>[iMaxVertices]),
-  viTriangles(new VECTOR3<unsigned>[iMaxTris]),
   iVertices(0),
   iTriangles(0)
 {
   vfVertices.reserve(iMaxVertices);
+  vfNormals.reserve(iMaxVertices);
+  viTriangles.reserve(iMaxTris);
 }
 
 Isosurface::~Isosurface() {
-  delete[] vfNormals;
-  delete[] viTriangles;
 }
 
 int Isosurface::AddTriangle(unsigned a, unsigned b, unsigned c) {
-  viTriangles[iTriangles++] = VECTOR3<unsigned>(a,b,c);
+  viTriangles.push_back(VECTOR3<unsigned>(a,b,c));
+  iTriangles++;
   return iTriangles-1;
 }
 
 int Isosurface::AddVertex(const VECTOR3<float>& v, const VECTOR3<float>& n) {
   vfVertices.push_back(v);
-  vfNormals[iVertices++] = n;
+  vfNormals.push_back(n);
+  iVertices++;
   return iVertices-1;
 }
+
+
+
+// ****************************************************************************
+// ALSO try *resetting* the Isosurface instead of deleting/re-allocing it every
+// layer.  this should allow the vectors to amortize out the allocations much
+// better.
+// ****************************************************************************
+// TRY buffering so that one layer is downloading while another is running MC.
+// ****************************************************************************
+
 
 void Isosurface::AppendData(const Isosurface* other) {
   // if verts in other, expand the storage this surface
   if (other->iVertices > 0) {
-    // create new mem
-    VECTOR3<float>* temp_Normals = new VECTOR3<float>[iVertices + other->iVertices];
-    VECTOR3<unsigned>* temp_Triangles = new VECTOR3<unsigned>[iTriangles + other->iTriangles];
-
-    // copy "old" data
-    std::memcpy(temp_Normals, vfNormals, sizeof(VECTOR3<float>)*iVertices);
-    std::memcpy(temp_Triangles, viTriangles, sizeof(VECTOR3<unsigned>)*iTriangles);
-
-    // append new data
-    std::memcpy(temp_Normals+iVertices, other->vfNormals,
-                sizeof(VECTOR3<float>)*other->iVertices);
-    std::memcpy(temp_Triangles+iTriangles, other->viTriangles,
-                sizeof(VECTOR3<unsigned>)*other->iTriangles);
-
-    // delete "old" data
-    delete[] vfNormals;
-    delete[] viTriangles;
-
-    // rename
-    vfNormals   = temp_Normals;
-    viTriangles = temp_Triangles;
-
-		// append data to vectors.
-    vfVertices.insert(vfVertices.end(), other->vfVertices.begin(),
-                      other->vfVertices.end());
+		// append data sensibly.
+    vfVertices.insert(vfVertices.end(), other->vfVertices.cbegin(),
+                      other->vfVertices.cend());
+    vfNormals.insert(vfNormals.end(), other->vfNormals.cbegin(),
+                     other->vfNormals.cend());
+    viTriangles.insert(viTriangles.end(), other->viTriangles.cbegin(),
+                       other->viTriangles.cend());
   }
 
   // update this list's counters
