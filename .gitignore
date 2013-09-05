@@ -26,3 +26,5 @@ sshd
 survey.sh
 tjf/ffrag
 tjf/svfs
+*.gcda
+*.gcno
