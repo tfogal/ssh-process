@@ -38,6 +38,8 @@ public:
     int AddVertex(const FLOATVECTOR3& v, const FLOATVECTOR3& n);
     void AppendData(const Isosurface* other);
     void Transform(const FLOATMATRIX4& matrix);
+
+    void reset(); // resets to initial state, without deallocation.
 };
 
 Isosurface::Isosurface() :
@@ -68,6 +70,16 @@ int Isosurface::AddVertex(const VECTOR3<float>& v, const VECTOR3<float>& n) {
   vfNormals.push_back(n);
   iVertices++;
   return iVertices-1;
+}
+
+void
+Isosurface::reset()
+{
+  this->vfVertices.resize(0);
+  this->vfNormals.resize(0);
+  this->viTriangles.resize(0);
+  this->iVertices = 0;
+  this->iTriangles = 0;
 }
 
 
@@ -119,7 +131,8 @@ void Isosurface::Transform(const FLOATMATRIX4& matrix) {
 
 template <class T=float> class MarchingCubes {
 public:
-    Isosurface*     m_Isosurface;
+    Isosurface* m_Isosurface;
+    Isosurface* sliceIsosurface; // temp isosurf, for 1 layer.
 
     MarchingCubes<T>(void);
     virtual ~MarchingCubes<T>(void);
@@ -474,7 +487,9 @@ static int16_t triTable[256][16] = {
  {NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE, NO_EDGE}
 };
 
-template <class T> MarchingCubes<T>::MarchingCubes(void)
+template <class T> MarchingCubes<T>::MarchingCubes(void) :
+  m_Isosurface(NULL),
+  sliceIsosurface(NULL)
 {
   m_vVolSize    = INTVECTOR3(0,0,0);
   m_pTVolume    = NULL;
@@ -484,7 +499,10 @@ template <class T> MarchingCubes<T>::MarchingCubes(void)
 
 template <class T> MarchingCubes<T>::~MarchingCubes(void)
 {
-  delete m_Isosurface;
+  delete this->m_Isosurface;
+  delete this->sliceIsosurface;
+  this->m_Isosurface = NULL;
+  this->sliceIsosurface = NULL;
 }
 
 template <class T> void
@@ -494,6 +512,10 @@ MarchingCubes<T>::SetVolume(int iSizeX, int iSizeY, int iSizeZ,
   m_pTVolume  = pTVolume;
   m_vVolSize  = INTVECTOR3(iSizeX, iSizeY, iSizeZ);
   m_TIsoValue = 0;
+  if(NULL == this->sliceIsosurface) {
+		// local part of the isosurface with at most 12 vertices and at most 5 triangles per cell
+		this->sliceIsosurface = new Isosurface((m_vVolSize.x-1) * (m_vVolSize.y-1) * 12, (m_vVolSize.x-1) * (m_vVolSize.y-1) * 5);
+  }
 }
 
 template <class T> void MarchingCubes<T>::Process(T TIsoValue)
@@ -540,8 +562,7 @@ MarchingCubes<T>::MarchLayer(LayerTempData<T>* layer, int iLayer) {
   int cellVerts[12];  // the 12 possible vertices in a cell
   for (int i = 0; i < 12; i++) cellVerts[i] = NO_EDGE;
 
-  // local part of the isosurface with at most 12 vertices and at most 5 triangles per cell
-  Isosurface* sliceIsosurface = new Isosurface((m_vVolSize.x-1) * (m_vVolSize.y-1) * 12, (m_vVolSize.x-1) * (m_vVolSize.y-1) * 5);
+  this->sliceIsosurface->reset();
 
   // march all cells in the layer
   for(int i = 0; i < m_vVolSize.x-1; i++) {
@@ -695,8 +716,6 @@ MarchingCubes<T>::MarchLayer(LayerTempData<T>* layer, int iLayer) {
 
   // add this layer's triangles to the global list
   m_Isosurface->AppendData(sliceIsosurface);
-
-  delete sliceIsosurface;
 }
 
 template <class T> int
