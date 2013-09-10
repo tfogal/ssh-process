@@ -1101,14 +1101,18 @@ slice_transfer(int input, const off_t size, int ofd, const char* dsname,
   printf("[tjf] 2-slice-based transfer.\n");
   proc->init(proc, tds->signedness == SIGNED, tds->bpc, tds->dims);
 
-  assert(slices >= 2 && "can't prime like this; algorithm bad.");
+  assert(slices >= 2 && "can't prime like this; bad algorithm.");
   assert(slice_size < (size_t)size && "prime would read whole data set");
   /* prime the buffer by reading one slice into the 2nd half of the buffer. */
   {
-    if(stream(input, ofd, buffer, slice_size) <= 0) {
+    if(stream(input, ofd, (char*)buffer+slice_size, slice_size) <= 0) {
       run_err("%s", strerror(errno));
       goto error;
     }
+    /* first run of the processor gets 0's in the front half of the buffer and
+     * actual data in the 2nd half.  it's unclear whether this is always
+     * desirable... but it certainly is for marching cubes. */
+    proc->run(proc, buffer, slice_size/tds->bpc);
   }
 
   /* now iterate through the rest of the slices.  each time, we'll copy the
@@ -1119,8 +1123,8 @@ slice_transfer(int input, const off_t size, int ofd, const char* dsname,
     memcpy(buffer, ((const char*)buffer)+slice_size, slice_size);
 
     const size_t toread = min(slice_size, size - (slice*slice_size));
-    /* read new slice into right half */
-    ssize_t bytes = stream(input, ofd, (char*)buffer+slice_size, toread);
+    /* read new slice into right/second half */
+    const ssize_t bytes = stream(input, ofd, (char*)buffer+slice_size, toread);
     if(bytes != (ssize_t)toread) {
       run_err("%s", "error streaming data");
       goto error;
@@ -1128,6 +1132,11 @@ slice_transfer(int input, const off_t size, int ofd, const char* dsname,
 
     /* execute processor on the slices we have now. */
     proc->run(proc, buffer, bytes/tds->bpc);
+  }
+  { /* copy second half to first and zero out second for final slice. */
+    memcpy(buffer, ((const char*)buffer)+slice_size, slice_size);
+		memset((char*)buffer+slice_size, 0, slice_size);
+    proc->run(proc, buffer, slice_size/tds->bpc);
   }
   free(buffer);
   if(proc->fini) {
