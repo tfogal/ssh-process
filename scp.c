@@ -1334,7 +1334,9 @@ sink(int argc, char **argv)
 
 		for (size = 0; isdigit(*cp);)
 			size = size * 10 + (*cp++ - '0');
+#ifndef NDEBUG
     fprintf(stderr, "[tjf] the size is: %lu\n", (uint64_t)(size));
+#endif
 		if (*cp++ != ' ')
 			SCREWUP("size not delimited");
 		if ((strchr(cp, '/') != NULL) || (strcmp(cp, "..") == 0)) {

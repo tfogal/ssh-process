@@ -1014,7 +1014,9 @@ march(void* self, const void* d, const size_t nelems)
       break;
     default: abort(); /* unimplemented. */ break;
   }
+#ifndef NDEBUG
   printf("[tjf] %zu vertices at slice %zu\n", this->n_vertices, this->slice);
+#endif
   this->slice++;
 }
 
