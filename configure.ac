@@ -265,6 +265,15 @@ AC_ARG_WITH([cflags],
 		fi
 	]
 )
+AC_ARG_WITH([cxxflags],
+  [  --with-cxxflags         Specify additional flags for the C++ compiler],
+  [
+    if test -n "$withval" && test "x${withval}" != "xno" && \
+       test "x${withval}" != "xyes" ; then
+      CXXFLAGS="${CXXFLAGS} ${withval}"
+    fi
+  ]
+)
 AC_ARG_WITH([cppflags],
 	[  --with-cppflags         Specify additional flags to pass to preprocessor] ,
 	[
@@ -4396,12 +4405,11 @@ fi
 dnl Adding -Werror to CFLAGS early prevents configure tests from running.
 dnl Add now.
 CFLAGS="$CFLAGS $werror_flags"
-CXXFLAGS="$werror_flags -ggdb"
+CXXFLAGS="${CXXFLAGS} $werror_flags -ggdb"
 CXXFLAGS="${CXXFLAGS} -Wall -Wpointer-arith -Wuninitialized -Wsign-compare "
 CXXFLAGS="${CXXFLAGS} -Wformat-security -Wno-unused-result "
 CXXFLAGS="${CXXFLAGS} -fno-strict-aliasing -D_FORTIFY_SOURCE=2 "
-CXXFLAGS="${CXXFLAGS} -fno-builtin-memset -fstack-protector-all -std=c++11"
-CXXFLAGS="${CXXFLAGS} --coverage -pg"
+CXXFLAGS="${CXXFLAGS} -fstack-protector-all -std=c++11"
 CXXFLAGS="${CXXFLAGS} -Wsuggest-attribute=pure"
 CXXFLAGS="${CXXFLAGS} -Wsuggest-attribute=const"
 CXXFLAGS="${CXXFLAGS} -Wdisabled-optimization"
