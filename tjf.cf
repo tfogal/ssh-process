@@ -1,10 +1,11 @@
 #!/bin/sh
 
-PROFILE="-O3 --coverage -pg"
+PROFILE="-O3 --coverage -pg -DNDEBUG"
 DEBUG="-ggdb"
 ./configure \
   CFLAGS="${PROFILE}" \
   CXXFLAGS="${PROFILE}" \
   LDFLAGS="${PROFILE}" \
   --with-cflags="-std=gnu99 ${PROFILE}" \
+  --with-cxxflags="${PROFILE}" \
   $@
