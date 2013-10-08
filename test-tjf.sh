@@ -8,6 +8,7 @@ testfile="magnitude.nhdr.raw"
 # -T: enable my stuff
 # -a: enable giving advice
 # -h: create 'holy' file.
+# -m: run marching cubes
 
 # simple test: just grabbing a small file
 #${scp} -v -T ${remote}:DynamicBrickingDS.cpp .

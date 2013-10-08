@@ -28,3 +28,11 @@ tjf/ffrag
 tjf/svfs
 *.gcda
 *.gcno
+.isovalue*
+time-scp-mc
+time-scp
+time-scp-sys
+.faces
+.vertices
+autom4te.cache/
+configure

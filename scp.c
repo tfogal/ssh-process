@@ -1087,7 +1087,7 @@ stream(int fd, int ofd, void* buffer, size_t bytes)
 
 /* similar to tjftransfer, but only calls the given processor when we have
  * cached up two slices worth of data. */
-static int
+int
 slice_transfer(int input, const off_t size, int ofd, const char* dsname,
                struct processor* proc)
 {
@@ -1127,6 +1127,7 @@ slice_transfer(int input, const off_t size, int ofd, const char* dsname,
     const ssize_t bytes = stream(input, ofd, (char*)buffer+slice_size, toread);
     if(bytes != (ssize_t)toread) {
       run_err("%s", "error streaming data");
+      wrerr = YES;
       goto error;
     }
 
@@ -1149,7 +1150,55 @@ error:
   exit(1);
 }
 
+/* processes data slice-by-slice, but constructs a buffer large enough for the
+ * whole file. this makes buffer management a lot easier, though we can't
+ * handle files larger than available memory... */
 static int
+buffered_slice_transfer(int input, const off_t size, int ofd,
+                        const char* dsname, struct processor* proc)
+{
+	enum { YES, NO, } wrerr = NO;
+
+  const struct dsinfo* tds = tjf_findds(dsname);
+  const size_t slice_size = tds->dims[0] * tds->dims[1] * tds->bpc;
+  const size_t slices = tds->dims[2];
+  /* we allocate +2 slices so that we have a layer of 0s on each end; this is
+   * needed so that MCubes will create appropriate boundary layers. */
+  void* buffer = calloc(slice_size, slices+2);
+
+  printf("[tjf] all-slice-based transfer.\n");
+  proc->init(proc, tds->signedness == SIGNED, tds->bpc, tds->dims);
+
+  for(size_t slice=0; slice < slices; slice++) {
+    const size_t slice_num = slice + 1; /* leave slice full of zeroes */
+    const size_t toread = min(slice_size, size - (slice*slice_size));
+    /* read the new slice */
+    const ssize_t bytes = stream(input, ofd,
+                                 (char*)buffer+(slice_size*slice_num), toread);
+    if(bytes != (ssize_t)toread) {
+      run_err("%s", "error streaming data");
+      wrerr = YES;
+      goto error;
+    }
+
+    /* execute processor on the slices we have now. */
+    proc->run(proc, (const char*)buffer+(slice_size*slice), bytes/tds->bpc);
+  }
+  /* one final run to get the border slice. */
+  proc->run(proc, (const char*)buffer+(slice_size*slices),
+            slice_size/tds->bpc);
+  free(buffer);
+  if(proc->fini) {
+    proc->fini(proc);
+  }
+  return wrerr == YES ? 1 : 0;
+
+error:
+  free(buffer);
+  exit(1);
+}
+
+int
 is_even(uint64_t value)
 {
   return (value & 0x1) == 0;
@@ -1435,7 +1484,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
       if(tjfmarching) {
         printf("running MC as we transfer\n");
         struct processor* mc = mcubes();
-        slice_transfer(remin, size, ofd, np, mc);
+        buffered_slice_transfer(remin, size, ofd, np, mc);
         free(mc);
       } else if(tjfholy) {
         printf("creating a hole-y file.\n");
